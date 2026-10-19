@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/call.css">
+</head>
+<body class="room">
+  <!-- Pre-join -->
+  <section id="prejoin" class="prejoin hidden">
+    <div class="preview">
+      <video id="preview" autoplay muted playsinline></video>
+      <div class="preview-off" id="previewOff">Camera is off</div>
+      <button id="pjCam" class="btn cam-toggle" type="button">Turn camera on</button>
+      <div class="meter-pill" aria-label="Microphone level"><span>Mic</span><div class="lvl"><div id="meterBar"></div></div></div>
+    </div>
+    <div class="join-panel">
+      <h1 id="pjTitle">Ready to join?</h1>
+      <p id="pjSub" class="sub"></p>
+      <div id="resumeBox" class="resume hidden">
+        <h3>Your resume</h3>
+        <p class="small dim">The interviewer reads it first, so the questions are about your own work.</p>
+        <label class="file-btn"><input type="file" id="resumeFile" accept=".pdf,.txt,.md"><span id="resumeLabel">Choose a PDF</span></label>
+        <details><summary class="small dim">Paste it as text instead</summary><textarea id="resumeText" rows="5"></textarea>
+          <button id="resumeBtn" class="btn" style="margin-top:8px">Use this text</button></details>
+        <div id="resumeProgress" class="progress hidden" role="status" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <div><b id="resumeStep">Uploading your resume</b><span id="resumeTime" class="small dim"></span>
+            <div class="bar"><i id="resumeBar"></i></div></div>
+        </div>
+        <p id="resumeStatus" class="small dim" role="status"></p>
+      </div>
+      <label class="consent"><input type="checkbox" id="consent"><span>I agree to an interview led by an AI interviewer. My answers are transcribed and shared with the hiring team. My video stays on this device and is not recorded.</span></label>
+      <button id="joinBtn" class="btn join" disabled>Join interview</button>
+      <p id="pjStatus" class="small dim" role="status"></p>
+    </div>
+  </section>
+
+  <!-- In call -->
+  <section id="call" class="call hidden">
+    <header class="call-bar"><span id="callTitle"></span><span id="timer" class="clock" role="timer" aria-live="off"></span></header>
+    <div class="stage">
+      <div class="tile ai" id="aiTile">
+        <div class="voice" id="voice" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="thinking hidden" id="thinking" aria-label="Interviewer is thinking"><i></i><i></i><i></i></div>
+        <div class="tag">Interviewer</div>
+      </div>
+      <div class="tile me" id="meTile">
+        <video id="selfVideo" autoplay muted playsinline></video>
+        <div class="initials hidden" id="meAvatar"><span id="meInitials"></span></div>
+        <div class="tag" id="meName">You</div>
+        <div class="tag right" id="micState"></div>
+      </div>
+    </div>
+    <div class="captions" id="captions" aria-live="polite"></div>
+    <div class="typebox hidden" id="typebox"><input id="typeInput" placeholder="Type your answer and press Enter"></div>
+    <nav class="controls" aria-label="Call controls">
+      <button id="micBtn" class="ctl">Mute</button>
+      <button id="camBtn" class="ctl">Camera</button>
+      <button id="ccBtn" class="ctl on">CC</button>
+      <button id="typeBtn" class="ctl">Type</button>
+      <button id="doneBtn" class="ctl send" disabled>Done</button>
+      <button id="endBtn" class="ctl leave">Leave</button>
+    </nav>
+  </section>
+
+  <section id="finished" class="endcard hidden">
+    <h1>Thanks for your time</h1>
+    <p class="sub">Your interview is complete and has been shared with the hiring team. They'll be in touch about next steps.</p>
+    <div id="feedback" class="feedback hidden"><h3>Feedback from your interview</h3><p id="feedbackText"></p></div>
+  </section>
+
+  <section id="invalid" class="endcard hidden"><h1>This link isn't valid</h1><p class="sub" id="invalidMsg"></p></section>
+  <script type="module" src="/static/interview.js"></script>
+</body>
+</html>
