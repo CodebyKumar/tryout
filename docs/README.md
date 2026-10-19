@@ -1,4 +1,4 @@
-# AI Screening Interviewer - PRD (v1)
+# Tryout - Product Spec (v1)
 
 ## Problem
 A company hiring for one role gets hundreds of applicants. Recruiters run 30-minute screening calls:
@@ -38,5 +38,6 @@ Two sides, one loop:
 LLM: Groq free tier, one key, model per role with fallback (`.env`). Storage: JSON files in `data/`.
 
 ## Next
-Groq Whisper STT and better TTS, phone-call mode, email / WhatsApp invites, ATS webhooks, auth, Hindi / Hinglish,
-LLM sensitivity check, calibration across candidates.
+Proctoring (tab switches, face presence, second voice), paste and answer-timing integrity signals, email invites and
+reminders, recruiter auth and candidate link expiry, ATS webhooks, LLM sensitivity check, calibration across
+candidates. Interviews are English only.

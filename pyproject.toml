@@ -1,7 +1,7 @@
 [project]
-name = "interviewer"
+name = "tryout"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tryout: AI voice screening interviewer with evidence-backed reports"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.3",

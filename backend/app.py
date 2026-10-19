@@ -20,7 +20,7 @@ from .models import Candidate, Criterion, InterviewPlan, Role, Session, Target
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("app")
-app = FastAPI(title="AI Screening Interviewer")
+app = FastAPI(title="Tryout")
 _locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 _tasks: set[asyncio.Task] = set()
 

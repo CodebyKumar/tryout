@@ -1,6 +1,6 @@
-# Tasks
+# Tryout - Tasks
 
-Spec: [docs/README.md](docs/README.md). Run: `./run.sh start | stop | restart | status | logs | dev | test | sim [persona]`.
+Overview: [README.md](README.md). Spec: [docs/README.md](docs/README.md). Run: `./run.sh start | stop | restart | status | logs | dev | test | sim [persona]`.
 
 ## Done (v1)
 - [x] Recruiter: create role from JD + notes, AI-designed brief and rubric, editable
@@ -14,8 +14,6 @@ Spec: [docs/README.md](docs/README.md). Run: `./run.sh start | stop | restart | 
 
 ## Next
 - [ ] Proctoring (tab switches, face presence, second voice), shown on the report timeline
-- [ ] Email / WhatsApp invite sending, reminder
+- [ ] Email invite sending, reminder
 - [ ] Recruiter auth; candidate link expiry
-- [ ] Phone-call mode
 - [ ] Integrity: paste detection, answer-timing signals
-- [ ] Hindi / Hinglish

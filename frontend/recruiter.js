@@ -1,4 +1,4 @@
-// Shortlist recruiter app. Routes: #/ · #/new · #/role/ID · #/role/ID/plan · #/report/ID
+// Tryout recruiter app. Routes: #/ · #/new · #/role/ID · #/role/ID/plan · #/report/ID
 import { $, api, confirmDialog, esc, fmt, postForm, status, ticking } from "/static/common.js";
 
 const app = $("#app");
@@ -50,7 +50,7 @@ async function home(nav = navSeq) {
 // ---------- New role: one document in, full interview plan out ----------
 function newRole(first = false) {
   app.innerHTML = `<div class="page-head"><div><h1>${first ? "Set up your first role" : "New role"}</h1>
-    <p class="lede">Upload whatever you already have: the job description, interview guidelines, a rubric, or rough notes. Shortlist reads it and builds the interview plan and scoring for you. You can adjust it afterwards in plain words.</p></div></div>
+    <p class="lede">Upload whatever you already have: the job description, interview guidelines, a rubric, or rough notes. Tryout reads it and builds the interview plan and scoring for you. You can adjust it afterwards in plain words.</p></div></div>
     <div class="panel">
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a hiring document">
         <h2>Drop your hiring document here</h2><p class="muted">PDF, Word or text file. Or click to choose one.</p>
@@ -177,7 +177,7 @@ function planTab(role) {
     </div>
 
     <div class="panel" style="margin-top:16px"><details id="manual"><summary><b>Edit everything by hand</b> <span class="small faint">for exact wording</span></summary><div id="editor"></div></details></div>
-    ${role.notes || role.jd ? `<div class="panel"><details><summary><b>What Shortlist read from your document</b></summary>
+    ${role.notes || role.jd ? `<div class="panel"><details><summary><b>What Tryout read from your document</b></summary>
       <p class="small muted" style="margin-top:12px;white-space:pre-wrap">${esc(role.jd)}</p>${role.notes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap"><b>Notes for the interviewer</b><br>${esc(role.notes)}</p>` : ""}</details></div>` : ""}`;
 
   $("#apply").addEventListener("click", async (e) => {
