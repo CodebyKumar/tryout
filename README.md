@@ -30,6 +30,8 @@ against the transcript. The AI suggests; a human always decides.
 | Interview Engine | code | every turn | State machine: time budgets, coverage, probe limits, section switching |
 | Evaluator | strong | once per interview | Per-criterion rating with quotes; code verifies quotes and computes the score |
 
+Diagrams (system, one interview turn, rate-limit handling): [docs/architecture.md](docs/architecture.md).
+
 The LLM proposes, the engine decides. Section changes, timing and scoring are deterministic, so every candidate for a
 role gets the same brief and rubric.
 

@@ -101,7 +101,7 @@ async function rolePage(id, tab, nav = navSeq) {
 
 function candidatesTab(role) {
   const link = (c) => `${location.origin}/i/${c.token}`;
-  const statusPill = (c) => c.evaluating ? `<span class="pill live">Scoring</span>` : `<span class="pill ${c.status}">${STATUS[c.status]}</span>`;
+  const statusPill = (c) => c.evaluating ? `<span class="pill live">Scoring</span>` : c.eval_failed ? `<span class="pill warn">Scoring failed</span>` : `<span class="pill ${c.status}">${STATUS[c.status]}</span>`;
   $("#body").innerHTML = `
     <div class="panel"><div class="panel-title"><h2>Invite a candidate</h2><span class="small faint">They get a private link and can take the interview any time.</span></div>
       <div class="fields"><label>Full name<input id="cname" autocomplete="off"></label><label>Email<input id="cemail" type="email" autocomplete="off"></label></div>
@@ -113,7 +113,7 @@ function candidatesTab(role) {
         const open = c.fit != null || c.score != null || c.status !== "invited";
         return `<tr class="${open ? "click" : ""}" data-id="${c.candidate_id}" data-open="${open}">
           <td><div class="name">${esc(c.name)}</div><div class="small faint">${esc(c.email)}</div></td>
-          <td>${statusPill(c)}</td><td class="num">${c.fit != null ? `<a href="#/report/${c.candidate_id}" title="See what the fit is based on">${c.fit}%</a>` : "<span class='faint'>No resume yet</span>"}</td>
+          <td>${statusPill(c)}</td><td class="num">${c.prep_status === "failed" ? `<button class="btn quiet" data-prep="${c.candidate_id}">Resume read failed - retry</button>` : c.fit != null ? `<a href="#/report/${c.candidate_id}" title="See what the fit is based on">${c.fit}%</a>` : "<span class='faint'>No resume yet</span>"}</td>
           <td class="num">${c.score != null ? `${c.score} / 5` : "-"}</td>
           <td>${c.recommendation ? `<span class="pill ${c.recommendation}">${REC[c.recommendation]}</span>` : "-"}</td>
           <td><div class="row end"><button class="btn quiet" data-copy="${esc(link(c))}">Copy link</button>
@@ -133,6 +133,11 @@ function candidatesTab(role) {
   app.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy link"), 1500); }
     catch { prompt("Interview link", b.dataset.copy); }
+  }));
+  app.querySelectorAll("[data-prep]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Reading the resume...";
+    try { await api(`/candidates/${b.dataset.prep}/prepare`, { method: "POST" }); rolePage(role.role_id, "candidates"); }
+    catch (err) { b.disabled = false; b.title = err.message; b.textContent = "Still failing - retry"; }
   }));
   app.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", async () => {
     if (!await confirmDialog({ title: "Reset this interview?", confirm: "Reset interview",
@@ -253,12 +258,17 @@ async function reportPage(id, nav = navSeq) {
   if (!r) {
     const scoring = d.state === "EVALUATING";
     const note = scoring ? "Scoring the interview. This usually takes under a minute."
+      : d.state === "EVAL_FAILED" ? `Scoring failed, the transcript is safe. ${esc(d.eval_error)}`
       : d.state === "DONE" ? "This interview hasn't been scored." : c.status === "in_progress" ? "Interview in progress." : "Hasn't taken the interview yet.";
     app.innerHTML = `${back}<div class="page-head"><div><h1>${esc(c.name)}</h1><p class="sub">${note}</p></div>
-      ${d.state === "DONE" ? `<button id="reeval" class="btn primary">Score interview</button>` : ""}</div>
+      ${d.state === "DONE" || d.state === "EVAL_FAILED" ? `<button id="reeval" class="btn primary">${d.state === "DONE" ? "Score interview" : "Retry scoring"}</button><span id="rst" class="status"></span>` : ""}</div>
       <div style="max-width:640px">${fitPanel(d.fit)}</div>`;
     if (scoring) { clearInterval(poll); poll = setInterval(() => reportPage(id, nav).catch(() => {}), 3000); }
-    $("#reeval")?.addEventListener("click", async (e) => { e.target.disabled = true; await api(`/candidates/${id}/reevaluate`, { method: "POST" }); reportPage(id); });
+    $("#reeval")?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try { await api(`/candidates/${id}/reevaluate`, { method: "POST" }); reportPage(id); }
+      catch (err) { status($("#rst"), err.message, true); e.target.disabled = false; }
+    });
     return;
   }
   const quotesByTurn = {};

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|sim]
+# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim]
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -70,6 +70,7 @@ case "${1:-start}" in
     ;;
   dev) setup; uv run uvicorn backend.app:app --reload --port "$PORT" ;;
   test) uv run pytest -q ;;
+  lint) uv run ruff check && uv run ruff format --check ;;
   sim) uv run python scripts/simulate.py "${@:2}" ;;
-  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|sim [persona]]"; exit 1 ;;
+  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim [persona]]"; exit 1 ;;
 esac

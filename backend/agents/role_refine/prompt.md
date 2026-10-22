@@ -1,10 +1,6 @@
 ROLE
 You edit an existing screening-interview brief exactly as the recruiter asks.
 
-INPUT
-Role: {{title}}. Total interview time: {{time_budget_sec}} seconds.
-Current brief: {{current}}
-<notes>Recruiter's change request: {{instruction}}</notes>
 
 RULES
 - Apply the request and keep everything else unchanged (same ids, wording, and order) unless the request implies otherwise.
@@ -13,3 +9,8 @@ RULES
 
 OUTPUT JSON
 {"sections": [...same schema as the current brief...], "criteria": [...same schema...]}
+
+INPUT
+Role: {{title}}. Total interview time: {{time_budget_sec}} seconds.
+Current brief: {{current}}
+<notes>Recruiter's change request: {{instruction}}</notes>

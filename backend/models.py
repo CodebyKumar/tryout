@@ -1,33 +1,49 @@
 """Data contracts: Role (recruiter side), Candidate, InterviewPlan, Session, Report."""
 
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from . import config
+
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex[:10]}"
 
 
+class Usage(BaseModel):
+    agent: str
+    model: str
+    prompt_version: str = ""
+    calls: int = 1  # HTTP calls that produced the answer (2 when a repair was needed)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cached_tokens: int = 0
+    latency_ms: int = 0
+
+
 # ---------- Recruiter side ----------
+
 
 class Slot(BaseModel):
     """One piece of evidence a section must collect, e.g. 'own_role: what they personally built'."""
+
     slot_id: str
     desc: str
     required: bool = True
 
 
-class Target(BaseModel):
+class Section(BaseModel):
     """An interview section."""
-    target_id: str
+
+    section_id: str
     name: str
     intent: str
     opening_question: str
@@ -50,11 +66,13 @@ class Role(BaseModel):
     role_id: str = Field(default_factory=lambda: new_id("r"))
     title: str
     company: str = ""
-    jd: str
+    jd: str  # the job description, or the AI's summary of an uploaded document
+    document: str = ""  # the recruiter's uploaded document as they wrote it
     notes: str = ""
-    time_budget_sec: int = 900
-    sections: list[Target] = []
+    time_budget_sec: int = config.TIME_BUDGET_SEC
+    sections: list[Section] = []
     criteria: list[Criterion] = []
+    usage: list[Usage] = []  # LLM calls that built and refined this brief
     created_at: datetime = Field(default_factory=now)
 
 
@@ -77,6 +95,7 @@ class Candidate(BaseModel):
 
 # ---------- Interview ----------
 
+
 class FitItem(BaseModel):
     requirement: str
     must_have: bool = True
@@ -87,6 +106,7 @@ class FitItem(BaseModel):
 class Fit(BaseModel):
     """How well the resume matches the role. Shown to the recruiter only.
     score = weighted share of requirements met: must-haves count 2, nice-to-haves 1; strong 1, partial 0.5, none 0."""
+
     score: int | None = None  # 0-100
     items: list[FitItem] = []
     matched: list[str] = []
@@ -102,14 +122,17 @@ class InterviewPlan(BaseModel):
     role_title: str
     company: str = ""
     time_budget_sec: int
-    targets: list[Target]
+    sections: list[Section]
     resume_highlights: list[str] = []
     claims_to_verify: list[str] = []
     fit: Fit = Fit()
     stt_hint: str = ""  # vocabulary for speech-to-text: role, tools, resume terms
+    prep_status: Literal["ok", "failed", "skipped"] = "skipped"  # skipped: no resume to read
+    prep_error: str = ""
+    usage: list[Usage] = []  # LLM calls made while preparing this plan
 
-    def target(self, target_id: str) -> Target | None:
-        return next((t for t in self.targets if t.target_id == target_id), None)
+    def section(self, section_id: str) -> Section | None:
+        return next((t for t in self.sections if t.section_id == section_id), None)
 
 
 SlotStatus = Literal["missing", "vague", "filled", "unknown", "declined", "conflict"]
@@ -122,7 +145,7 @@ class SlotState(BaseModel):
     probes: int = 0
 
 
-class TargetState(BaseModel):
+class SectionState(BaseModel):
     status: Literal["pending", "active", "satisfied", "partial", "skipped"] = "pending"
     time_used_sec: float = 0
     probe_count: int = 0
@@ -134,7 +157,8 @@ class Turn(BaseModel):
     role: Literal["agent", "user"]
     text: str
     ts: datetime = Field(default_factory=now)
-    target_id: str | None = None
+    section_id: str | None = None
+    fallback: bool = False  # the LLM failed and the agent asked the candidate to repeat
 
 
 class Flag(BaseModel):
@@ -144,16 +168,8 @@ class Flag(BaseModel):
     text: str
 
 
-class Usage(BaseModel):
-    agent: str
-    model: str
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cached_tokens: int = 0
-    latency_ms: int = 0
-
-
 # ---------- Report ----------
+
 
 class Evidence(BaseModel):
     turn_id: str
@@ -181,10 +197,12 @@ class Report(BaseModel):
     concerns: list[str] = []
     resume_flags: list[str] = []
     candidate_feedback: str = ""
+    model: str = ""  # which model and prompt produced this report, for audits
+    prompt_version: str = ""
     created_at: datetime = Field(default_factory=now)
 
 
-SessionState = Literal["READY", "INTERVIEWING", "WRAPUP", "EVALUATING", "DONE"]
+SessionState = Literal["READY", "INTERVIEWING", "WRAPUP", "EVALUATING", "EVAL_FAILED", "DONE"]
 
 
 class Session(BaseModel):
@@ -196,12 +214,13 @@ class Session(BaseModel):
     started_at: datetime | None = None
     last_tick_at: datetime | None = None
     elapsed_sec: float = 0
-    current_target_id: str | None = None
-    targets: dict[str, TargetState] = {}
+    current_section_id: str | None = None
+    sections: dict[str, SectionState] = {}
     turns: list[Turn] = []
     flags: list[Flag] = []
     usage: list[Usage] = []
     report: Report | None = None
+    eval_error: str = ""  # why the last evaluation failed (state EVAL_FAILED)
 
     def next_turn_id(self, role: str) -> str:
         return f"{'u' if role == 'user' else 'a'}{len(self.turns) + 1}"

@@ -1,0 +1,126 @@
+"""Interviews, by private link token. The engine decides state, the Turn Agent proposes; this is the only place
+that joins them, and the only place that saves a session."""
+
+import logging
+
+from .. import store
+from ..agents import turn_agent
+from ..agents.base import run_agent
+from ..engine import context, state_machine
+from ..integrations import stt, tts
+from ..integrations.llm import LLMError
+from ..models import InterviewPlan, Role, Session
+from . import Invalid, NotFound, evaluation, get, locks
+from .candidates import by_token, read_resume
+
+log = logging.getLogger("interviews")
+
+# Whisper invents these on silence or noise; treat them as "didn't catch that".
+_NOISE = {"", "you", "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "okay", "uh", "um"}
+
+
+async def handle_user_turn(plan: InterviewPlan, session: Session, text: str) -> dict:
+    """One candidate answer -> at most one Turn Agent call -> state update. Returns what the UI needs."""
+    if session.state not in ("INTERVIEWING", "WRAPUP"):
+        raise Invalid("This interview has already ended")
+    if duplicate := state_machine.duplicate_reply(session, text):
+        return duplicate
+    wrapup = session.state == "WRAPUP"
+    user_turn = state_machine.record_answer(session, text)
+    if wrapup:
+        # The answer to "anything else?" needs no LLM: nothing is left to ask, and the evaluator reads it in the
+        # transcript. Saves one full Turn Agent call per interview.
+        return state_machine.end(session, "Thank you.")
+    try:
+        out, usage = await run_agent(
+            turn_agent.SPEC,
+            candidate_name=plan.candidate_name or "the candidate",
+            company=plan.company or "the company",
+            role_title=plan.role_title,
+            context=context.build(plan, session),
+            turn_id=user_turn.turn_id,
+            user_text=user_turn.text,
+        )
+    except LLMError as e:
+        log.error("turn agent failed: %s", e)
+        return state_machine.fallback(session)
+    session.usage.append(usage)
+    return state_machine.apply_turn(plan, session, user_turn, out)
+
+
+def _session(token: str) -> tuple[Session, InterviewPlan]:
+    cand = by_token(token)
+    s = get(Session, cand.session_id)
+    return s, get(InterviewPlan, s.plan_id)
+
+
+def info(token: str):
+    """Everything the candidate page needs: the candidate, the role, and the interview if it has started."""
+    cand = by_token(token)
+    s = store.load(Session, cand.session_id) if cand.session_id else None
+    plan = get(InterviewPlan, s.plan_id) if s else None
+    return cand, get(Role, cand.role_id), s, plan
+
+
+async def start(token: str) -> tuple[Session, InterviewPlan]:
+    """Idempotent: a second start (reload, double click) returns the running interview."""
+    cand = by_token(token)
+    async with locks[cand.candidate_id]:
+        cand = by_token(token)
+        if cand.session_id:
+            return _session(token)
+        plan = get(InterviewPlan, cand.plan_id) if cand.plan_id else await read_resume(cand)
+        s = state_machine.new_session(plan)
+        state_machine.start(plan, s)
+        cand.session_id, cand.status = s.session_id, "in_progress"
+        store.save(s)
+        store.save(cand)  # last, so a crash never leaves the candidate pointing at a missing session
+        return s, plan
+
+
+async def answer(token: str, text: str) -> tuple[dict, Session, InterviewPlan]:
+    if not text.strip():
+        raise Invalid("Empty answer")
+    cand = by_token(token)
+    async with locks[cand.candidate_id]:
+        s, plan = _session(token)
+        result = await handle_user_turn(plan, s, text)
+        store.save(s)
+    if result["done"]:
+        evaluation.run_later(cand, s)
+    return result, s, plan
+
+
+async def answer_audio(token: str, audio: bytes, filename: str) -> tuple[str, dict | None, Session, InterviewPlan]:
+    """Voice answer: Whisper transcribes it (with role vocabulary as a hint), then the normal turn runs. Returns the
+    transcript and the turn result, or no result when nothing usable was said."""
+    cand = by_token(token)
+    s, plan = _session(token)
+    last_q = next((t.text for t in reversed(s.turns) if t.role == "agent"), "")
+    # The candidate's full name goes in the hint: Whisper can't spell names it has never seen.
+    text = await stt.transcribe(audio, filename, f"Candidate: {cand.name}. {plan.stt_hint} {last_q}")
+    if text.lower().strip(" .!?") in _NOISE or not any(ch.isalnum() for ch in text):
+        return "", None, s, plan
+    result, s, plan = await answer(token, text)
+    return text, result, s, plan
+
+
+async def speak(token: str, turn_id: str) -> bytes:
+    """Interviewer audio for one agent turn. Generated on request and never stored: the transcript is the record."""
+    s, _ = _session(token)
+    turn = next((t for t in s.turns if t.turn_id == turn_id and t.role == "agent"), None)
+    if not turn:
+        raise NotFound("No such turn")
+    return await tts.speak(turn.text)
+
+
+async def end(token: str) -> tuple[Session, InterviewPlan]:
+    """The candidate ends early: whatever was said is evaluated."""
+    cand = by_token(token)
+    async with locks[cand.candidate_id]:
+        s, plan = _session(token)
+        if s.state in ("INTERVIEWING", "WRAPUP"):
+            s.state, s.current_section_id = "EVALUATING", None
+            store.save(s)
+            evaluation.run_later(cand, s)
+    return s, plan

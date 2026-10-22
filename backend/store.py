@@ -11,8 +11,12 @@ from .models import Candidate, InterviewPlan, Role, Session
 
 T = TypeVar("T", bound=BaseModel)
 
-_KINDS = {Role: ("roles", "role_id"), Candidate: ("candidates", "candidate_id"),
-          InterviewPlan: ("plans", "plan_id"), Session: ("sessions", "session_id")}
+_KINDS = {
+    Role: ("roles", "role_id"),
+    Candidate: ("candidates", "candidate_id"),
+    InterviewPlan: ("plans", "plan_id"),
+    Session: ("sessions", "session_id"),
+}
 
 
 def _path(kind: str, obj_id: str) -> Path:
@@ -31,7 +35,7 @@ def save(obj: BaseModel) -> None:
     tmp.replace(path)
 
 
-def load(cls: type[T], obj_id: str) -> T | None:
+def load[T: BaseModel](cls: type[T], obj_id: str) -> T | None:
     kind, _ = _KINDS[cls]
     path = _path(kind, obj_id)
     if not path.exists():
@@ -39,12 +43,12 @@ def load(cls: type[T], obj_id: str) -> T | None:
     return cls.model_validate_json(path.read_text())
 
 
-def delete(cls: type[T], obj_id: str) -> None:
+def delete[T: BaseModel](cls: type[T], obj_id: str) -> None:
     kind, _ = _KINDS[cls]
     _path(kind, obj_id).unlink(missing_ok=True)
 
 
-def load_all(cls: type[T]) -> list[T]:
+def load_all[T: BaseModel](cls: type[T]) -> list[T]:
     kind, _ = _KINDS[cls]
     d = config.DATA_DIR / kind
     return [cls.model_validate_json(p.read_text()) for p in sorted(d.glob("*.json"))] if d.exists() else []

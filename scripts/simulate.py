@@ -12,9 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 from backend.app import app  # noqa: E402
-from backend.llm.client import get_llm  # noqa: E402
+from backend.integrations.llm import get_llm  # noqa: E402
 
 JD = """Backend Engineer, Payments (2-4 years). Acme Pay, Bengaluru.
 You will build and run the services that move merchant money: settlement, payouts, reconciliation.
@@ -36,21 +37,34 @@ PERSONAS = {
 }
 
 
+class Reply(BaseModel):
+    reply: str = "I'm not sure."
+
+
 async def candidate_reply(persona: str, question: str, history: list[str]) -> str:
     system = 'You role-play a job candidate in a voice screening interview. Return JSON {"reply": "..."}.'
-    user = (f"Persona: {PERSONAS[persona]}\nYour resume: {RESUME}\nThe truth behind it: {TRUTH}\n"
-            "Conversation so far:\n" + "\n".join(history[-6:]) + f"\nInterviewer: {question}\n"
-            "Reply in 1 to 4 spoken sentences, in character.")
-    out, _ = await get_llm().json(agent="sim_candidate", role="aux", system=system, user=user, max_tokens=800, temperature=0.8)
-    return out.get("reply", "I'm not sure.")
+    user = (
+        f"Persona: {PERSONAS[persona]}\nYour resume: {RESUME}\nThe truth behind it: {TRUTH}\n"
+        "Conversation so far:\n" + "\n".join(history[-6:]) + f"\nInterviewer: {question}\n"
+        "Reply in 1 to 4 spoken sentences, in character."
+    )
+    out, _ = await get_llm().json(
+        agent="sim_candidate", role="aux", system=system, user=user, output=Reply, max_tokens=800, temperature=0.8
+    )
+    return out.reply
 
 
 def run(c: TestClient, persona: str):
     t0 = time.time()
-    role = c.post("/api/roles", json={"title": "Backend Engineer, Payments", "jd": JD, "notes": NOTES, "time_budget_sec": 600})
+    role = c.post(
+        "/api/roles", json={"title": "Backend Engineer, Payments", "jd": JD, "notes": NOTES, "time_budget_sec": 600}
+    )
     role.raise_for_status()
     role = role.json()
-    print(f"ROLE ({time.time() - t0:.1f}s):", json.dumps([(s["name"], s["time_budget_sec"], [x["slot_id"] for x in s["slots"]]) for s in role["sections"]]))
+    print(
+        f"ROLE ({time.time() - t0:.1f}s):",
+        json.dumps([(s["name"], s["time_budget_sec"], [x["slot_id"] for x in s["slots"]]) for s in role["sections"]]),
+    )
     print("CRITERIA:", [(x["name"], x["weight"]) for x in role["criteria"]])
     cand = c.post(f"/api/roles/{role['role_id']}/candidates", json={"name": "Riya Pillai", "resume": RESUME}).json()
     token = cand["token"]
@@ -68,26 +82,28 @@ def run(c: TestClient, persona: str):
             print("TURN ERROR", r.status_code, r.text)
             break
         r = r.json()
-        print(f"       [{time.time() - t1:.1f}s section={r['interview']['current_target_id']} state={r['interview']['state']}]")
+        print(
+            f"       [{time.time() - t1:.1f}s section={r['interview']['current_section_id']} state={r['interview']['state']}]"
+        )
         say = r["say"]
         if r["done"]:
             print(f"\nAGENT: {say}")
             break
     for _ in range(120):
         rep = c.get(f"/api/candidates/{cand['candidate_id']}").json()
-        if rep["report"] or rep["state"] == "DONE":
+        if rep["report"] or rep["state"] in ("DONE", "EVAL_FAILED"):
             break
         time.sleep(1)
     r = rep["report"]
     print("\n=== REPORT ===")
     if not r:
-        print("No report (evaluation failed)")
+        print(f"No report (interview state: {rep['state']} {rep.get('eval_error') or ''})")
         return
     print(f"Score {r['overall_score']} | suggested {r['recommendation']}: {r['recommendation_reason']}\n{r['summary']}")
     for x in r["criteria"]:
         print(f"- {x['name']}: {x['rating']} {x['score']} verified={x['verified']} | {x['rationale']}")
         for e in x["evidence"]:
-            print(f"    [{e['at']}] \"{e['quote']}\"")
+            print(f'    [{e["at"]}] "{e["quote"]}"')
     print("Strengths:", r["strengths"], "\nConcerns:", r["concerns"], "\nResume flags:", r["resume_flags"])
     print("Feedback:", r["candidate_feedback"])
     print("USAGE:", rep["usage"], f"total {time.time() - t0:.0f}s")

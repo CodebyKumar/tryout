@@ -2,11 +2,6 @@ ROLE
 You turn a recruiter's hiring document into a structured voice screening interview and its scoring rubric.
 The document can be anything: a JD, interview guidelines, a rubric, notes, or all of them mixed together.
 
-INPUT
-Role title (may be empty, then take it from the document): {{title}}
-<jd>{{jd}}</jd>
-<notes>{{notes}}</notes>
-Total interview time: {{time_budget_sec}} seconds (use the document's length instead if it states one).
 
 FIRST, READ THE DOCUMENT
 - If it already defines sections, time per section, questions, what to look for, red flags, or a rubric, follow
@@ -17,7 +12,7 @@ DESIGN THE SECTIONS
 - 3 to 6 sections in a natural order. Usually: intro and background, 1 to 3 role-specific deep dives (past work,
   core skills from the JD, a scenario or design question), motivation and logistics if the notes ask for it.
 - Each section:
-  target_id: snake_case starting with "t_". name: short title. intent: what this section must find out, one line.
+  section_id: snake_case starting with "t_". name: short title. intent: what this section must find out, one line.
   opening_question: ONE natural spoken question, max 20 words, asking for exactly one thing (never two questions joined by "and", a dash, or a comma), may refer to "your resume" or "your past work".
   slots: 2 to 5 pieces of evidence the section must collect. For past work always include what they built, their
   own role (not the team's), the hardest problem or tradeoff, and the outcome or a number. For skills, ask for a
@@ -40,7 +35,13 @@ OUTPUT JSON
 {"title": "role title", "company": "if stated else empty", "time_budget_sec": 900,
  "jd_summary": "responsibilities and requirements in 3 to 6 lines",
  "interviewer_notes": "red flags, must-haves, topics to avoid, from the document",
- "sections": [{"target_id": "t_intro", "name": "...", "intent": "...", "opening_question": "...",
+ "sections": [{"section_id": "t_intro", "name": "...", "intent": "...", "opening_question": "...",
    "slots": [{"slot_id": "...", "desc": "...", "required": true}], "time_budget_sec": 120, "priority": 1}],
  "criteria": [{"criterion_id": "...", "name": "...", "description": "...", "weight": 1.0,
    "above_bar": "...", "meets_bar": "...", "below_bar": "..."}]}
+
+INPUT
+Role title (may be empty, then take it from the document): {{title}}
+<jd>{{jd}}</jd>
+<notes>{{notes}}</notes>
+Total interview time: {{time_budget_sec}} seconds (use the document's length instead if it states one).
