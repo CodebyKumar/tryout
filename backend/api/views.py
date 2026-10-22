@@ -2,6 +2,7 @@
 
 from ..engine import policy
 from ..models import Candidate, InterviewPlan, Role, Session
+from ..services.candidates import Summary
 
 
 def usage(s: Session) -> dict:
@@ -35,34 +36,34 @@ def interview(s: Session, plan: InterviewPlan) -> dict:
     }
 
 
-def summary(c: Candidate, s: Session | None, plan: InterviewPlan | None) -> dict:
-    r = s.report if s else None
+def summary(sm: Summary) -> dict:
     return {
-        **c.model_dump(exclude={"resume"}),
-        "score": r.overall_score if r else None,
-        "fit": plan.fit.score if plan else None,
-        "recommendation": r.recommendation if r else None,
-        "evaluating": bool(s and s.state == "EVALUATING"),
-        "eval_failed": bool(s and s.state == "EVAL_FAILED"),
-        "prep_status": plan.prep_status if plan else None,
+        **sm.candidate.model_dump(exclude={"resume", "plan_id", "session_id"}),
+        "score": sm.score,
+        "fit": sm.fit,
+        "recommendation": sm.recommendation,
+        "evaluating": sm.state == "EVALUATING",
+        "eval_failed": sm.state == "EVAL_FAILED",
+        "prep_status": sm.prep_status,
+        "brief_version": sm.brief_version,
     }
 
 
-def role_list(rows: list[tuple[Role, list[Candidate]]]) -> list[dict]:
+def role_list(rows: list[tuple[Role, list[str]]]) -> list[dict]:
     return [
         {
-            **r.model_dump(include={"role_id", "title", "company", "created_at", "time_budget_sec"}),
-            "candidates": len(cands),
-            "completed": sum(1 for c in cands if c.status not in ("invited", "in_progress")),
+            **r.model_dump(include={"role_id", "title", "company", "created_at", "time_budget_sec", "version"}),
+            "candidates": len(statuses),
+            "completed": sum(1 for x in statuses if x not in ("invited", "in_progress")),
         }
-        for r, cands in rows
+        for r, statuses in rows
     ]
 
 
-def role(r: Role, candidates: list[tuple[Candidate, Session | None, InterviewPlan | None]]) -> dict:
-    cands = [summary(*b) for b in candidates]
+def role(r: Role, candidates: list[Summary]) -> dict:
+    cands = [summary(x) for x in candidates]
     cands.sort(key=lambda c: (c["score"] is None, -(c["score"] or 0)))
-    return {**r.model_dump(), "candidates": cands}
+    return {**r.model_dump(exclude={"usage", "document"}), "candidates": cands}
 
 
 def report(c: Candidate, r: Role, s: Session | None, plan: InterviewPlan | None) -> dict:
@@ -76,6 +77,7 @@ def report(c: Candidate, r: Role, s: Session | None, plan: InterviewPlan | None)
         "state": None,
         "eval_error": "",
         "fit": plan.fit.model_dump() if plan else None,
+        "role_version": plan.role_version_id if plan else None,
     }
     if s:
         names = {t.section_id: t.name for t in plan.sections}

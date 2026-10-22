@@ -30,7 +30,7 @@ Run: `./run.sh start | stop | restart | status | logs | dev | test | sim [person
 
 ## Phase 0 - Setup (today)
 
-- [ ] 0.1 Create the cloud Postgres project (Neon or Supabase) and a separate database / branch for development.
+- [x] 0.1 Create the cloud Postgres project (Neon or Supabase) and a separate database / branch for development.
 - [x] 0.2 Add `DATABASE_URL` and storage credentials to `.env.example` (no secrets committed).
 - [x] 0.3 Add `ruff` for lint + format; `./run.sh lint`.
 - [x] 0.4 Test helpers: `fake_llm` fixture shared across test files (`tests/conftest.py`).
@@ -114,20 +114,25 @@ HTTP handlers become thin; orchestration lives in one place. See audit 5.1 and s
 
 ## Phase 4 - Cloud database
 
-Schema from audit 8.4. JSON storage is removed at the end of this phase.
+Schema from audit 8.4, lean variant (decided 2026-10-22): 12 tables in [backend/tables.py](backend/tables.py);
+nested structures (a brief's sections and criteria, a plan, a session's engine state, a report) are JSON columns.
+Supabase free tier, Session pooler (IPv4). Every table has RLS on with no policies: the app connects as owner, the
+public REST API is blocked. `alembic upgrade head` applies migrations; `TEST_DATABASE_URL` runs tests on Postgres.
 
 - [x] 4.0 `Target` -> `Section` in code, API, prompts (version bump) and frontend; the import maps old field names.
-- [ ] 4.1 SQLAlchemy models + Alembic `0001_initial` for all tables in audit 8.4.
-- [ ] 4.2 `db.py` (engine + async session) and `tables.py`; services query through SQLAlchemy directly, no
+- [x] 4.1 SQLAlchemy models + Alembic `0001_initial` for all tables in audit 8.4.
+- [x] 4.2 `db.py` (engine + async session) and `tables.py`; services query through SQLAlchemy directly, no
   repository layer on top. Tests run the same code on in-memory SQLite.
-- [ ] 4.3 `D1`, `D2`, `A2` Role versions: compile / refine / edit create a new version; plans and evaluations point at one.
-- [ ] 4.4 `D3` A turn is one transaction: insert turn, update slot and section states, insert llm_call.
-- [ ] 4.5 `D4` Every evaluation run is kept; one is current.
-- [ ] 4.6 `D8` Original files to object storage; `documents` table keeps extracted text.
-- [ ] 4.7 `D9`, `C7` Indexed token lookup; ranking as one query.
-- [ ] 4.8 `scripts/import_json.py`: import existing `data/*.json`, then verify counts and one report by hand.
-- [ ] 4.9 Remove `store.py` and `data/` usage.
-- [ ] 4.10 `[UI]` Warn when editing a role that has invited candidates; show which brief version a candidate got.
+- [x] 4.3 `D1`, `D2`, `A2` Role versions: compile / refine / edit create a new version; plans and evaluations point at one.
+- [x] 4.4 `D3` A turn is one transaction: insert turn, update slot and section states, insert llm_call.
+- [x] 4.5 `D4` Every evaluation run is kept; one is current.
+- [~] 4.6 `D8` Original files to object storage; `documents` table keeps extracted text.
+  Text is kept for every upload. File upload to Supabase Storage is built and off until `SUPABASE_URL` and
+  `SUPABASE_SECRET_KEY` are in `.env` (free tier; the `documents` bucket exists).
+- [x] 4.7 `D9`, `C7` Indexed token lookup; ranking as one query.
+- [x] 4.8 `scripts/import_json.py`: import existing `data/*.json`, then verify counts and one report by hand.
+- [x] 4.9 Remove `store.py` and `data/` usage.
+- [x] 4.10 `[UI]` Warn when editing a role that has invited candidates; show which brief version a candidate got.
 - [ ] Manual check: two candidates on brief v1, refine role, third candidate on v2; reports score against their own version.
 
 ## Phase 5 - Jobs and lifecycle

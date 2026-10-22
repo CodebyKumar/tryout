@@ -113,7 +113,7 @@ function candidatesTab(role) {
         const open = c.fit != null || c.score != null || c.status !== "invited";
         return `<tr class="${open ? "click" : ""}" data-id="${c.candidate_id}" data-open="${open}">
           <td><div class="name">${esc(c.name)}</div><div class="small faint">${esc(c.email)}</div></td>
-          <td>${statusPill(c)}</td><td class="num">${c.prep_status === "failed" ? `<button class="btn quiet" data-prep="${c.candidate_id}">Resume read failed - retry</button>` : c.fit != null ? `<a href="#/report/${c.candidate_id}" title="See what the fit is based on">${c.fit}%</a>` : "<span class='faint'>No resume yet</span>"}</td>
+          <td>${statusPill(c)}${c.brief_version ? `<div class="small faint">brief v${c.brief_version}</div>` : ""}</td><td class="num">${c.prep_status === "failed" ? `<button class="btn quiet" data-prep="${c.candidate_id}">Resume read failed - retry</button>` : c.fit != null ? `<a href="#/report/${c.candidate_id}" title="See what the fit is based on">${c.fit}%</a>` : "<span class='faint'>No resume yet</span>"}</td>
           <td class="num">${c.score != null ? `${c.score} / 5` : "-"}</td>
           <td>${c.recommendation ? `<span class="pill ${c.recommendation}">${REC[c.recommendation]}</span>` : "-"}</td>
           <td><div class="row end"><button class="btn quiet" data-copy="${esc(link(c))}">Copy link</button>
@@ -162,7 +162,8 @@ function planTab(role) {
   let t = 0;
   const starts = role.sections.map((s) => { const at = t; t += s.time_budget_sec; return at; });
   $("#body").innerHTML = `
-    <div class="panel"><div class="panel-title"><h2>Change the plan</h2></div>
+    <div class="panel"><div class="panel-title"><h2>Change the plan</h2><span class="small faint">brief v${role.version}</span></div>
+      ${(() => { const n = role.candidates.filter((c) => c.brief_version).length; return n ? `<p class="small" style="color:var(--warn);margin-bottom:10px">${n} candidate${n > 1 ? "s were" : " was"} already prepared on an earlier or the current brief. A change creates brief v${role.version + 1} for new candidates; they keep the version they got.</p>` : ""; })()}
       <div class="ask"><label>Describe what you want changed<textarea id="ask" rows="2" placeholder="For example: spend more time on RAG evaluation, drop the logistics question, add a red flag for copy-pasted answers."></textarea></label>
       <button id="apply" class="btn primary">Apply change</button></div><p id="ast" class="status" style="margin-top:8px"></p></div>
 

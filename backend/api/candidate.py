@@ -17,14 +17,15 @@ class TurnIn(BaseModel):
 
 @router.get("")
 async def interview_info(token: str):
-    return views.candidate_info(*interviews.info(token))
+    return views.candidate_info(*await interviews.info(token))
 
 
 @router.post("/resume")
 async def upload_resume(token: str, file: UploadFile | None = File(None), text: str = Form("")):
+    raw = None
     if file is not None:
-        text = await read_document(file)
-    await candidates.upload_resume(token, text)
+        text, raw = await read_document(file)
+    await candidates.upload_resume(token, text, file.filename if file else None, raw)
     return {"ok": True}
 
 

@@ -31,10 +31,12 @@ flowchart LR
     INT -- "audio/transcriptions" --> GROQ
     INT -- "local" --> PIPER["Piper TTS<br/>(.onnx model)"]
     INT -- "local" --> FFMPEG["ffmpeg"]
-    SVC -- "read / write" --> DISK[("data/*.json<br/>(Postgres from Phase 4)")]
+    SVC -- "SQL (asyncpg, small pool)" --> PG[("Supabase Postgres<br/>free tier, Session pooler")]
+    INT -- "uploaded files" --> STORE[("Supabase Storage<br/>documents bucket")]
 ```
 
 One process, no queue. Background work (evaluation) runs as `asyncio` tasks in the same process until Phase 5.
+Services read in one short transaction, call the LLM with none open, then write in one transaction.
 
 ## A2. Layers
 
@@ -55,7 +57,7 @@ Read top to bottom: a layer may call the layers below it, never the ones above. 
 │ integrations/  llm.py (Groq chat, cooldowns, repair), groq.py (shared transport),     │
 │                stt.py (Whisper), tts.py (Piper), documents.py (PDF / DOCX / text)     │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
-│ foundations    models.py (data shapes)   config.py (.env)   store.py (JSON, Phase 4) │
+│ foundations    models.py (data shapes)  tables.py + db.py (Postgres)  config.py (.env) │
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,6 +77,7 @@ Errors cross layers as types, not HTTP codes: services raise `NotFound` (404) or
 | [services/roles.py](../backend/services/roles.py) | Create, from document, refine, manual edit (validated) | `create`, `refine`, `update` |
 | [services/candidates.py](../backend/services/candidates.py) | Invite, read resume, prepare retry, decide, reset, delete | `add`, `read_resume`, `prepare` |
 | [services/interviews.py](../backend/services/interviews.py) | Start, answer (text / voice), interviewer audio, end; the one place a turn runs | `handle_user_turn`, `answer` |
+| [services/sessions.py](../backend/services/sessions.py) | Load / save a session: engine state JSON, append-only turns and usage, one transaction per turn | `load`, `save` |
 | [services/evaluation.py](../backend/services/evaluation.py) | Run the Evaluator now or in the background | `run`, `run_later`, `rerun` |
 | [agents/base.py](../backend/agents/base.py) | Agent contract, prompt rendering, lenient output fields | `AgentSpec`, `run_agent`, `render` |
 | [agents/role_compiler/](../backend/agents/role_compiler/) | `CompiledRole`; `apply_compiled` validates every brief | `compile_role` |
@@ -91,10 +94,13 @@ Errors cross layers as types, not HTTP codes: services raise `NotFound` (404) or
 | [integrations/groq.py](../backend/integrations/groq.py) | One HTTP connection pool for chat and Whisper | `client` |
 | [integrations/stt.py](../backend/integrations/stt.py) | ffmpeg normalise (3 min cap, 30 s timeout), Whisper | `transcribe` |
 | [integrations/tts.py](../backend/integrations/tts.py) | Piper voice | `speak`, `warm_up` |
+| [integrations/storage.py](../backend/integrations/storage.py) | Original files to Supabase Storage (off without a secret key) | `upload` |
 | [integrations/documents.py](../backend/integrations/documents.py) | PDF / DOCX / UTF-8 text | `extract_text` |
 | [models.py](../backend/models.py) | Every data shape (Pydantic) | see A7 |
 | [config.py](../backend/config.py) | `.env`: models per tier, interview rules, upload caps | `MODELS` |
-| [store.py](../backend/store.py) | JSON file persistence (replaced in Phase 4) | `save`, `load` |
+| [tables.py](../backend/tables.py) | The 12 database tables (lean schema; nested data as JSON columns) | - |
+| [db.py](../backend/db.py) | Engine (small pool for the free tier) and `transaction()` | `transaction` |
+| [migrations/](../migrations/) | Alembic; `0001` creates the tables and turns on RLS | `alembic upgrade head` |
 
 ## A4. Route map
 
@@ -226,7 +232,7 @@ sequenceDiagram
     participant A as api + services
     participant RC as role_compiler/
     participant L as integrations/llm.py
-    participant S as store.py
+    participant S as Postgres (services + tables)
     R->>A: POST /api/roles/from-document (file or text)
     A->>A: documents.extract_text (PDF / DOCX / text)
     A->>RC: compile_role(role, from_document=True)
@@ -247,7 +253,7 @@ sequenceDiagram
     participant A as api + services
     participant CP as candidate_prep/
     participant L as integrations/llm.py
-    participant S as store.py
+    participant S as Postgres (services + tables)
     R->>A: POST /api/roles/{id}/candidates (name, email, resume)
     A->>A: Candidate(token = random)
     A->>A: _prepare(cand)
@@ -271,7 +277,7 @@ sequenceDiagram
     participant E as engine/state_machine.py
     participant P as policy.py / context.py
     participant L as integrations/llm.py
-    participant S as store.py
+    participant S as Postgres (services + tables)
     B->>A: POST /api/i/{token}/audio
     A->>V: transcribe(audio, hint)
     V->>V: ffmpeg -> 16 kHz FLAC
@@ -302,7 +308,7 @@ sequenceDiagram
     participant A as api + services
     participant EV as evaluator/
     participant L as integrations/llm.py
-    participant S as store.py
+    participant S as Postgres (services + tables)
     Note over A: last turn returns done=true, or POST /end
     A->>A: _evaluate_later -> asyncio task
     A->>S: Session.state = EVALUATING
@@ -432,7 +438,7 @@ All in [integrations/llm.py](../backend/integrations/llm.py) (`GroqLLM.json`), t
 | Interviewer voice | `.env` `PIPER_MODEL`, [`_synth`](../backend/integrations/tts.py) |
 | What the candidate can see | [`views.interview`](../backend/api/views.py) |
 | What the recruiter list shows | [`views.summary`](../backend/api/views.py) |
-| Where files are saved | [store.py](../backend/store.py), `DATA_DIR` in `.env` |
+| Where data is saved | [tables.py](../backend/tables.py) (Postgres via `DATABASE_URL`); uploads in Supabase Storage |
 | Tests with a fake LLM | [tests/conftest.py](../tests/conftest.py) fixtures; one file per area in [tests/](../tests/) |
 | End-to-end run with the real LLM | [scripts/simulate.py](../scripts/simulate.py), `./run.sh sim vague` |
 
@@ -529,7 +535,7 @@ agents/evaluator/
 Opening any agent folder answers the same four questions in the same order: **what goes in, what comes out, what
 code checks it, what happens when it fails.**
 
-## B3. Old file -> new home (done in Phases 2 and 3, except storage: Phase 4)
+## B3. Old file -> new home (done in Phases 2 to 4)
 
 | Today | Moves to |
 |-------|----------|

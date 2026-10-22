@@ -1,9 +1,13 @@
 """Shared test fixtures: a fixed role brief, a scripted fake LLM, an app client and an interview plan."""
 
+import asyncio
+import os
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 
-from backend import config
+from backend import db, tables
 from backend.agents.role_compiler import CompiledRole, apply_compiled
 from backend.app import app
 from backend.integrations.llm import FakeLLM, set_llm
@@ -144,9 +148,29 @@ def fake_llm():
     set_llm(None)
 
 
+async def _empty_tables():
+    async with db.transaction() as s:
+        for table in reversed(tables.Base.metadata.sorted_tables):
+            await s.execute(table.delete())
+
+
 @pytest.fixture
-def client(tmp_path, monkeypatch, fake_llm):
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+def database(tmp_path):
+    """A fresh SQLite database with the real tables, so tests run the same SQL code offline. TEST_DATABASE_URL runs
+    them on Postgres instead; it must be an EMPTY, migrated test database: every table is emptied after each test."""
+    if url := os.getenv("TEST_DATABASE_URL"):
+        db.configure(url, pooled=False)
+        yield
+        asyncio.run(_empty_tables())
+        return
+    url = f"sqlite:///{tmp_path / 'test.db'}"
+    tables.Base.metadata.create_all(create_engine(url))
+    db.configure(url.replace("sqlite://", "sqlite+aiosqlite://"))
+    yield
+
+
+@pytest.fixture
+def client(database, fake_llm):
     with TestClient(app) as c:
         yield c, fake_llm
 

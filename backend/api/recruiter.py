@@ -44,11 +44,11 @@ class DecisionIn(BaseModel):
     status: str
 
 
-async def read_document(file: UploadFile) -> str:
+async def read_document(file: UploadFile) -> tuple[str, bytes]:
+    """The upload's text, and its bytes for storage."""
+    raw = await read_upload(file, MAX_DOC_BYTES)
     try:
-        return await asyncio.to_thread(
-            documents.extract_text, file.filename or "", await read_upload(file, MAX_DOC_BYTES)
-        )
+        return await asyncio.to_thread(documents.extract_text, file.filename or "", raw), raw
     except ValueError:
         raise HTTPException(400, "Could not read that file. Upload a PDF, DOCX or text file, or paste the text.")
 
@@ -60,12 +60,12 @@ async def create_role(body: RoleIn):
 
 @router.get("/roles")
 async def list_roles():
-    return views.role_list(roles.list_all())
+    return views.role_list(await roles.list_all())
 
 
 @router.get("/roles/{role_id}")
 async def get_role(role_id: str):
-    return views.role(*roles.with_candidates(role_id))
+    return views.role(await roles.get(role_id), await candidates.summaries(role_id=role_id))
 
 
 @router.post("/roles/from-document")
@@ -74,7 +74,7 @@ async def role_from_document(
 ):
     """Recruiter drops one document (JD, guidelines, rubric, notes); the AI builds the whole brief."""
     if file is not None:
-        text = await read_document(file)
+        text, _ = await read_document(file)
     return (await roles.from_document(text, title, time_budget_sec)).model_dump()
 
 
@@ -86,47 +86,52 @@ async def refine_role(role_id: str, body: RefineIn):
 @router.put("/roles/{role_id}")
 async def update_role(role_id: str, body: RoleUpdate):
     changes = {k: getattr(body, k) for k in body.model_dump(exclude_none=True)}
-    return roles.update(role_id, changes).model_dump()
+    return (await roles.update(role_id, changes)).model_dump()
 
 
 @router.post("/roles/{role_id}/candidates")
 async def add_candidate(role_id: str, body: CandidateIn):
-    return views.summary(*candidates.bundle(await candidates.add(role_id, **body.model_dump())))
+    cand = await candidates.add(role_id, **body.model_dump())
+    return views.summary(await candidates.summary(cand.candidate_id))
 
 
 @router.get("/candidates/{candidate_id}")
 async def candidate_report(candidate_id: str):
-    return views.report(*candidates.report(candidate_id))
+    return views.report(*await candidates.report(candidate_id))
 
 
 @router.post("/candidates/{candidate_id}/decision")
 async def decide(candidate_id: str, body: DecisionIn):
-    return views.summary(*candidates.bundle(candidates.decide(candidate_id, body.status)))
+    await candidates.decide(candidate_id, body.status)
+    return views.summary(await candidates.summary(candidate_id))
 
 
 @router.post("/candidates/{candidate_id}/release_feedback")
 async def release_feedback(candidate_id: str):
-    return views.summary(*candidates.bundle(candidates.release_feedback(candidate_id)))
+    await candidates.release_feedback(candidate_id)
+    return views.summary(await candidates.summary(candidate_id))
 
 
 @router.delete("/candidates/{candidate_id}")
 async def delete_candidate(candidate_id: str):
-    await candidates.delete(candidate_id)
+    await candidates.delete_candidate(candidate_id)
     return {"deleted": candidate_id}
 
 
 @router.post("/candidates/{candidate_id}/reset")
 async def reset_candidate(candidate_id: str):
-    return views.summary(*candidates.bundle(await candidates.reset(candidate_id)))
+    await candidates.reset(candidate_id)
+    return views.summary(await candidates.summary(candidate_id))
 
 
 @router.post("/candidates/{candidate_id}/reevaluate")
 async def reevaluate(candidate_id: str):
     await evaluation.rerun(candidate_id)
-    return views.report(*candidates.report(candidate_id))
+    return views.report(*await candidates.report(candidate_id))
 
 
 @router.post("/candidates/{candidate_id}/prepare")
 async def prepare(candidate_id: str):
     """Re-read the resume after a failed (or outdated) prep. Only before the interview starts."""
-    return views.summary(*candidates.bundle(await candidates.prepare(candidate_id)))
+    await candidates.prepare(candidate_id)
+    return views.summary(await candidates.summary(candidate_id))

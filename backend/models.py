@@ -72,7 +72,9 @@ class Role(BaseModel):
     time_budget_sec: int = config.TIME_BUDGET_SEC
     sections: list[Section] = []
     criteria: list[Criterion] = []
-    usage: list[Usage] = []  # LLM calls that built and refined this brief
+    usage: list[Usage] = []  # LLM calls not yet saved
+    version: int = 0  # which version of the brief this is (0: not saved yet)
+    version_id: str = ""
     created_at: datetime = Field(default_factory=now)
 
 
@@ -117,6 +119,7 @@ class Fit(BaseModel):
 class InterviewPlan(BaseModel):
     plan_id: str = Field(default_factory=lambda: new_id("p"))
     role_id: str
+    role_version_id: str = ""  # the brief this plan was built on; the evaluator scores against the same one
     candidate_id: str
     candidate_name: str
     role_title: str

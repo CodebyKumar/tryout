@@ -1,4 +1,6 @@
-"""Use cases. The only layer that touches storage and joins agents with the engine; each route calls one function.
+"""Use cases. The only layer that touches the database and joins agents with the engine; each route calls one
+function. Pattern: read in one short transaction, call the LLM with no transaction open (a slow model never holds a
+connection from the small free-tier pool), write in one transaction.
 
 Errors: NotFound (404), Invalid (400: bad input, or the action does not fit the current state). LLMError from an
 agent means the AI service is unavailable (503).
@@ -7,7 +9,8 @@ agent means the AI service is unavailable (503).
 import asyncio
 from collections import defaultdict
 
-from .. import store
+from .. import tables as t
+from ..models import Usage
 
 
 class NotFound(Exception):
@@ -19,11 +22,10 @@ class Invalid(Exception):
 
 
 # One lock per candidate, so a turn, a resume upload, a reset and a delete never interleave.
+# shortcut: in-process, so one server instance only; use SELECT ... FOR UPDATE when running several.
 locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
-def get(cls, obj_id: str | None):
-    obj = store.load(cls, obj_id) if obj_id else None
-    if obj is None:
-        raise NotFound(f"{cls.__name__} not found")
-    return obj
+def llm_calls(usage: list[Usage], **owner) -> list[t.LLMCall]:
+    """Usage records as rows, tagged with what they were for (role_id, candidate_id or session_id)."""
+    return [t.LLMCall(**u.model_dump(), **owner) for u in usage]

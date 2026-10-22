@@ -48,6 +48,7 @@ async def build_plan(role: Role, cand: Candidate) -> InterviewPlan:
     """Never raises: on LLM failure the plan uses the generic openers and is marked prep_status="failed"."""
     plan = InterviewPlan(
         role_id=role.role_id,
+        role_version_id=role.version_id,
         candidate_id=cand.candidate_id,
         candidate_name=cand.name.split()[0] if cand.name else "",
         role_title=role.title,
