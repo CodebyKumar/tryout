@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim|seed-demo|migrate]
+# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim|seed-demo|migrate|docker]
 set -euo pipefail
 cd "$(dirname "$0")"
 export PYTHONPYCACHEPREFIX="$PWD/.venv/.pycache"  # compiled Python stays inside .venv, not next to the code
@@ -75,5 +75,8 @@ case "${1:-start}" in
   sim) uv run python scripts/simulate.py "${@:2}" ;;
   seed-demo) uv run python scripts/simulate.py seed-demo ;;
   migrate) uv run alembic -c migrations/alembic.ini upgrade head ;;
-  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim [persona]|seed-demo|migrate]"; exit 1 ;;
+  docker)
+    # Build the production image and run it on http://localhost:7860 with this .env. Ctrl+C stops it.
+    docker build -t tryout . && docker run --rm --name tryout --env-file .env -p 7860:7860 tryout ;;
+  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim [persona]|seed-demo|migrate|docker]"; exit 1 ;;
 esac

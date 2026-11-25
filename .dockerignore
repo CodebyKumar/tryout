@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.run
+.claude
+.hallmark
+tests
+docs
+**/__pycache__
+*.pyc
