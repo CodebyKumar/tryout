@@ -81,5 +81,5 @@ def test_objects_sent_as_json_strings_are_read_not_renamed():
             ]
         }
     )
-    assert [i.requirement for i in out.items] == ["Python or Go", "Designing reliable APIs", "Kafka"]
+    assert [i.requirement for i in out.items] == ["Python or Go", "Designing reliable APIs"]  # prose is dropped
     assert out.items[1].match == "strong"

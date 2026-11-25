@@ -21,7 +21,8 @@ class FitItemOut(BaseModel):
 
 
 class FitOut(BaseModel):
-    items: Annotated[list[FitItemOut], objects("requirement")] = []
+    # No name_key: the prompt asks for objects, so a bare string here is prose that leaked into the list.
+    items: Annotated[list[FitItemOut], objects()] = []
     summary: Text = ""
 
 

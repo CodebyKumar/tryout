@@ -1,6 +1,7 @@
 """Interviews, by private link token. The engine decides state, the Turn Agent proposes; this is the only place
 that joins them."""
 
+import asyncio
 import logging
 import time
 from datetime import timedelta
@@ -22,6 +23,7 @@ log = logging.getLogger("interviews")
 
 # Whisper invents these on silence or noise; treat them as "didn't catch that".
 _NOISE = {"", "you", "thank you", "thanks", "thanks for watching", "thank you for watching", "bye", "okay", "uh", "um"}
+PREP_WAIT_SEC = 30  # at most this long for a queued resume read before reading it here
 TAB_TAKEOVER_SEC = 60  # another tab may take over an interview whose tab has been silent this long
 LIVE = ("INTERVIEWING", "WRAPUP")
 
@@ -121,6 +123,12 @@ async def start(
     async with db.transaction() as s:
         cand = await candidates.load(s, token=token)
     extensions = [x[:60] for x in (extensions or [])][:10]
+    # A resume read queued when the candidate was added may be running (on any server): wait for it rather than
+    # reading the resume a second time. Outside the lock, so the job itself is never blocked by this wait.
+    for _ in range(PREP_WAIT_SEC * 4):
+        if cand.session_id or not await candidates.prep_pending(cand.candidate_id):
+            break
+        await asyncio.sleep(0.25)
     async with locked(cand.candidate_id):
         async with db.transaction() as s:
             cand = await candidates.load(s, token=token)

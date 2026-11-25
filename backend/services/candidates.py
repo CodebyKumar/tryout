@@ -175,6 +175,18 @@ async def prepare_job(candidate_id: str) -> bool:
 jobs.HANDLERS["prepare"] = prepare_job
 
 
+async def prep_pending(candidate_id: str) -> bool:
+    """A resume read for this candidate is queued or running."""
+    async with db.transaction() as s:
+        return bool(
+            await s.scalar(
+                select(t.Job.id).where(
+                    t.Job.kind == "prepare", t.Job.target_id == candidate_id, t.Job.status.in_(("queued", "running"))
+                )
+            )
+        )
+
+
 async def _store_resume(s, cand: Candidate, text: str, filename: str | None = None, raw: bytes | None = None) -> None:
     path = await storage.upload(f"resumes/{cand.candidate_id}/{filename}", raw) if raw and filename else None
     s.add(
