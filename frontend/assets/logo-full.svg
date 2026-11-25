@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 32" role="img" aria-label="TryOut">
+  <!-- Mark plus wordmark, for documents and the README. The wordmark is Familjen Grotesk SemiBold, drawn as text. -->
+  <path d="M8 3h16a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H14l-6.2 4.6c-.7.5-1.6 0-1.6-.8V25A6 6 0 0 1 2 19V9a6 6 0 0 1 6-6z" fill="#2f5bea"/>
+  <rect x="8" y="9" width="16" height="3.2" rx="1.6" fill="#fff"/>
+  <rect x="8" y="15.4" width="11" height="3.2" rx="1.6" fill="#f6dd6e"/>
+  <text x="40" y="24" font-family="'Familjen Grotesk', 'Helvetica Neue', Arial, sans-serif" font-size="25" font-weight="600" letter-spacing="-0.8" fill="#1b2233">TryOut</text>
+</svg>

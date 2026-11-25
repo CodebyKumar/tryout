@@ -6,9 +6,10 @@
 @import url("./tokens.css");
 @import url("./base.css");
 
-/* Type scale (1.2): 14 labels and meta, 16 body and table text, 19 section heads, 23 figures, 28 page titles.
-   Three weights: 400 body, 500 labels and controls, 600 heads and names. Nothing smaller than 14px. */
+/* Type scale (about 1.25): 15 labels and meta, 17 body and table text, 21 section heads, 26 figures, 34 page
+   titles. Three weights: 400 body, 500 labels and controls, 600 heads and names. Nothing smaller than 13px. */
 :root {
+  --text-xs: 0.8125rem; --text-sm: 0.9375rem; --text-md: 1.0625rem; --text-lg: 1.3125rem; --text-xl: 1.625rem; --text-2xl: 2.125rem;
   /* the user asked for a white workspace: the paper steps up from Cobalt's 98.6 to near white */
   --color-paper: oklch(99.3% 0.002 250); --color-surface: oklch(99.9% 0.001 250);
   --color-warn: oklch(55% 0.13 70);
@@ -16,7 +17,7 @@
   --color-mark: oklch(91% 0.1 95); --color-mark-ink: oklch(25% 0.04 85);
   --color-overlay: oklch(21% 0.028 262 / 0.4);
   --shadow-pop: 0 16px 48px oklch(21% 0.028 262 / 0.18);
-  --side-w: 248px; --bar-h: 56px; --control-h: 36px; --page-max: 1200px;
+  --bar-h: 64px; --control-h: 40px; --page-max: 1200px;
 }
 
 body { font-size: var(--text-md); line-height: 1.5; }
@@ -36,8 +37,8 @@ a:hover { text-decoration-color: var(--color-accent); }
 body.app { min-height: 100vh; }
 .appbar { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: color-mix(in oklab, var(--color-paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: var(--rule-hair) solid var(--color-rule); }
 .appbar-in { display: flex; align-items: center; gap: var(--space-lg); max-width: var(--page-max); height: var(--bar-h); margin-inline: auto; padding-inline: var(--space-xl); }
-.brand { display: flex; align-items: center; gap: var(--space-xs); height: var(--control-h); font: 600 var(--text-lg)/1 var(--font-display); letter-spacing: var(--tracking-display); color: var(--color-ink); text-decoration: none; }
-.logo-mark { width: 26px; height: 26px; flex: none; }
+.brand { display: flex; align-items: center; gap: 10px; height: var(--control-h); font: 600 1.4375rem/1 var(--font-display); letter-spacing: -0.035em; color: var(--color-ink); text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; flex: none; }
 .appnav { display: flex; gap: var(--space-3xs); }
 .appnav a { display: inline-flex; align-items: center; min-height: var(--control-h); padding: 0 var(--space-sm); border-radius: var(--radius-input); font-size: var(--text-sm); font-weight: 500; color: var(--color-ink-2); text-decoration: none; }
 .appnav a:hover { background: var(--color-paper-3); color: var(--color-ink); }

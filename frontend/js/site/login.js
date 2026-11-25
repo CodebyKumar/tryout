@@ -13,8 +13,8 @@ if (await me()) location.replace(target);
 document.title = `${signUp ? "Create account" : "Sign in"} - TryOut`;
 $("#title").textContent = signUp ? "Create your account" : "Sign in";
 $("#intro").textContent = signUp
-  ? "New accounts can look around at once. Creating roles and inviting candidates opens after the admin approves the account."
-  : "Use the email and password you signed up with.";
+  ? "Look around at once. Creating roles and inviting candidates opens when the admin approves you."
+  : "Welcome back. Use the email and password you signed up with.";
 $("#nameField").hidden = !signUp;
 $("#pwHint").hidden = !signUp;
 $("[name=password]").autocomplete = signUp ? "new-password" : "current-password";
@@ -22,6 +22,12 @@ $("#submit").textContent = signUp ? "Create account" : "Sign in";
 $("#switch").innerHTML = signUp
   ? `Already have an account? <a href="/login${location.search}">Sign in</a>`
   : `New to TryOut? <a href="/signup${location.search}">Create an account</a>`;
+
+$("#demo").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try { await api("/auth/demo", { method: "POST" }); location.href = "/app"; }
+  catch (err) { status($("#status"), err.message, true); e.target.disabled = false; }
+});
 
 $("#form").addEventListener("submit", async (e) => {
   e.preventDefault();

@@ -157,5 +157,5 @@ document.addEventListener("keydown", (e) => {
 // A small "?" that explains a term on hover or keyboard focus.
 export const tip = (text) => `<span class="tip" tabindex="0" role="note" aria-label="${esc(text)}" data-tip="${esc(text)}">?</span>`;
 
-export const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--color-accent)"/><path d="M8 9.5h16v3.6h-6.2V21l-3.6 3.2V13.1H8z" fill="#fff"/><rect x="8" y="18.2" width="5" height="3" rx="1" fill="var(--color-mark)"/></svg>`;
+export const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M8 3h16a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H14l-6.2 4.6c-.7.5-1.6 0-1.6-.8V25A6 6 0 0 1 2 19V9a6 6 0 0 1 6-6z" fill="var(--color-accent)"/><rect x="8" y="9" width="16" height="3.2" rx="1.6" fill="#fff"/><rect x="8" y="15.4" width="11" height="3.2" rx="1.6" fill="var(--color-mark)"/></svg>`;
 export const brand = (href = "/") => `<a class="brand" href="${href}" aria-label="TryOut home">${LOGO}<span>TryOut</span></a>`;
