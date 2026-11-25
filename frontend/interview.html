@@ -8,13 +8,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/call.css">
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/room.css">
 </head>
 <body class="room">
   <!-- Lobby: device check, resume, consent -->
   <section id="prejoin" class="lobby hidden">
-    <header class="lobby-top"><span class="brand">TryOut</span></header>
+    <header class="lobby-top"><span class="brand" data-brand>TryOut</span></header>
     <div class="prejoin">
       <div class="lobby-media">
         <div class="preview">
@@ -39,7 +40,8 @@
           </div>
           <p id="resumeStatus" class="hint" role="status"></p>
         </div>
-        <label class="step consent"><input type="checkbox" id="consent"><span>I agree to an interview led by an AI interviewer. My answers are transcribed and shared with the hiring team. My video stays on this device and is not recorded. Leaving the tab or full screen, and copying or pasting, are noted for the hiring team.</span></label>
+        <div class="step checks"><h2>Before you join</h2><ul id="checks" class="check-list"></ul></div>
+        <label class="step consent"><input type="checkbox" id="consent"><span id="consentText"></span></label>
         <button id="joinBtn" class="btn primary join" type="button" disabled>Join interview</button>
         <p id="pjStatus" class="hint" role="status"></p>
       </div>
@@ -49,7 +51,7 @@
   <!-- In call -->
   <section id="call" class="call hidden">
     <header class="call-bar">
-      <div class="call-title"><span class="brand">TryOut</span><span id="callTitle"></span></div>
+      <div class="call-title"><span class="brand" data-brand>TryOut</span><span id="callTitle"></span></div>
       <div class="parts" id="parts" aria-live="polite"></div>
       <span id="timer" class="clock" role="timer" aria-live="off"></span>
     </header>
@@ -82,8 +84,15 @@
 
   <div class="notice hidden" id="notice" role="status"></div>
 
+  <div class="paused hidden" id="paused" role="alertdialog" aria-labelledby="pausedTitle">
+    <div><h2 id="pausedTitle">Interview paused</h2><p>This interview runs in full screen. Return to full screen to continue; the clock keeps running.</p>
+      <button type="button" class="btn primary" id="resumeFull">Return to full screen</button></div>
+  </div>
+
+  <section id="waiting" class="endcard hidden"><span class="brand" data-brand>TryOut</span><h1 id="waitTitle">Your interview opens soon</h1><p class="sub" id="waitMsg"></p><p class="clock" id="waitClock" role="timer"></p></section>
+
   <section id="finished" class="endcard hidden">
-    <span class="brand">TryOut</span>
+    <span class="brand" data-brand>TryOut</span>
     <h1>Thanks for your time</h1>
     <p class="sub">Your interview is complete and has been shared with the hiring team. They’ll be in touch about next steps.</p>
     <form id="rateForm" class="feedback hidden">
@@ -95,7 +104,7 @@
     <p id="rated" class="feedback hidden">Thanks for rating your interview.</p>
   </section>
 
-  <section id="invalid" class="endcard hidden"><span class="brand">TryOut</span><h1>This link isn’t valid</h1><p class="sub" id="invalidMsg"></p></section>
-  <script type="module" src="/static/interview.js"></script>
+  <section id="invalid" class="endcard hidden"><span class="brand" data-brand>TryOut</span><h1 id="invalidTitle">This link isn’t valid</h1><p class="sub" id="invalidMsg"></p></section>
+  <script type="module" src="/static/js/room/room.js"></script>
 </body>
 </html>

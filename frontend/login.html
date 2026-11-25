@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - TryOut</title>
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body class="site">
+  <header class="site-top"><a class="brand" href="/" aria-label="TryOut home" data-brand>TryOut</a></header>
+  <main class="auth">
+    <div class="auth-card">
+      <h1 id="title">Sign in</h1>
+      <p class="hint" id="intro"></p>
+      <form id="form" novalidate>
+        <label id="nameField" hidden>Your name<input name="name" autocomplete="name"></label>
+        <label>Work email<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label>Password <span class="hint" id="pwHint" hidden>At least 8 characters</span><input name="password" type="password" autocomplete="current-password" required></label>
+        <p class="status" id="status" role="status"></p>
+        <button class="btn primary" type="submit" id="submit">Sign in</button>
+      </form>
+      <p class="auth-switch" id="switch"></p>
+    </div>
+  </main>
+  <script type="module" src="/static/js/site/login.js"></script>
+</body>
+</html>

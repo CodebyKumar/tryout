@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TryOut</title>
+  <meta name="description" content="TryOut recruiter workspace: build an interview plan from a job description, invite candidates and review scored interviews with the evidence.">
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="app">
+  <aside class="side" aria-label="Workspace">
+    <div id="brand"></div>
+    <nav class="side-nav" aria-label="Main">
+      <a href="#/" class="on">Roles</a>
+      <a href="/admin" id="adminLink" hidden>Admin</a>
+    </nav>
+    <div class="account">
+      <div id="who" class="who"></div>
+      <button type="button" class="btn quiet" id="signOut">Sign out</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar"><div id="back"></div><nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav></header>
+    <div class="account-notice" id="notice" role="status" hidden></div>
+    <main id="app" class="page"></main>
+  </div>
+  <script type="module" src="/static/js/app/main.js"></script>
+</body>
+</html>

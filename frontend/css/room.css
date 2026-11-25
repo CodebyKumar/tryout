@@ -130,3 +130,17 @@
 .rate-opt:hover { border-color: var(--color-muted); }
 .rate-opt:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-wash); }
 .rate-opt:has(input:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+/* ---------- v2: lobby checks, waiting room, strict-mode pause ---------- */
+.room .brand { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.check-list { list-style: none; margin: var(--space-xs) 0 0; padding: 0; display: grid; gap: var(--space-2xs); font-size: var(--text-sm); }
+.check-list li { display: flex; gap: var(--space-xs); align-items: baseline; color: var(--color-ink-2); }
+.check-list .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--color-rule-2); transform: translateY(-1px); }
+.check-list li.ok .dot { background: var(--color-success); }
+.check-list li.bad { color: var(--color-ink); }
+.check-list li.bad .dot { background: var(--color-error); }
+.endcard .clock { justify-self: start; font-size: var(--text-lg); }
+.paused { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center; padding: var(--space-lg); background: color-mix(in oklab, var(--color-ink) 72%, transparent); }
+.paused > div { max-width: 420px; display: grid; gap: var(--space-sm); padding: var(--space-lg); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-pop); }
+.paused .btn { justify-self: start; }
+.no-select .call { user-select: none; -webkit-user-select: none; }

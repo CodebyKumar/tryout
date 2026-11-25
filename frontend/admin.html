@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin - TryOut</title>
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="app">
+  <aside class="side" aria-label="Workspace">
+    <div id="brand"></div>
+    <nav class="side-nav" aria-label="Main"><a href="/app">Roles</a><a href="/admin" class="on">Admin</a></nav>
+    <div class="account"><div id="who" class="who"></div><button type="button" class="btn quiet" id="signOut">Sign out</button></div>
+  </aside>
+  <div class="main">
+    <header class="topbar"><nav class="crumbs" aria-label="Breadcrumb"><span aria-current="page">Admin</span></nav></header>
+    <main class="page">
+      <div class="page-head"><h1>Admin</h1><div class="actions"><button type="button" class="btn" id="refresh">Refresh</button></div></div>
+      <section id="overview" aria-label="System"><div class="skeleton" aria-hidden="true"><i></i><i></i></div></section>
+      <section class="panel"><div class="panel-title"><h2>Accounts</h2><span class="hint" id="pendingCount"></span></div><div id="accounts"><div class="skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div></section>
+      <section class="panel"><div class="panel-title"><h2>AI use in the last 24 hours</h2></div><div id="usage"></div></section>
+    </main>
+  </div>
+  <script type="module" src="/static/js/admin/main.js"></script>
+</body>
+</html>

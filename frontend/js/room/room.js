@@ -1,11 +1,13 @@
-// Candidate interview, video-call style: pre-join (camera, mic, resume, consent) -> call -> finished.
-// Turn-taking: interviewer speaks (Piper audio) -> we listen with voice-activity detection -> the answer is
-// transcribed by Whisper on the server -> next question. Typing is always available.
-import { $, api, confirmDialog, esc, fmt, postForm } from "/static/common.js";
-import { enterFullscreen, startMonitor } from "/static/integrity.js";
+// Candidate interview, video-call style: lobby (checks, resume, consent) -> call -> finished.
+// Turn-taking: the interviewer speaks (Deepgram audio, or the browser's own voice) -> we listen with voice-activity
+// detection -> the answer is transcribed by Whisper on the server -> next question. Typing is always available.
+import { api, postForm } from "../lib/api.js";
+import { $, LOGO, confirmDialog, esc, fmt, when } from "../lib/ui.js";
+import { checkExtensions, enterFullscreen, startMonitor } from "./integrity.js";
 
 const token = location.pathname.split("/").pop();
-const st = { info: null, view: null, syncedAt: 0, phase: "idle", micOn: true, camOn: false, cc: true, resumeOk: false };
+const st = { info: null, view: null, syncedAt: 0, phase: "idle", micOn: true, camOn: false, cc: true, resumeOk: false, extensions: [], paused: false };
+document.querySelectorAll("[data-brand]").forEach((b) => (b.innerHTML = `${LOGO}<span>TryOut</span>`));
 let stream = null, audioCtx = null, analyser = null, recorder = null, vadRaf = null, agentAudio = null, micSource = null;
 
 // Phones switch to earpiece ("call mode") while a page holds the microphone. On mobile we release the mic as soon as
@@ -41,25 +43,67 @@ async function acquireMic() {
   } catch { return false; }
 }
 
-const show = (id) => ["prejoin", "call", "finished", "invalid"].forEach((v) => $(`#${v}`).classList.toggle("hidden", v !== id));
+const show = (id) => ["prejoin", "call", "finished", "invalid", "waiting"].forEach((v) => $(`#${v}`).classList.toggle("hidden", v !== id));
+const invalid = (title, msg) => { $("#invalidTitle").textContent = title; $("#invalidMsg").textContent = msg; show("invalid"); };
 const live = () => ["INTERVIEWING", "WRAPUP"].includes(st.view?.state);
 
 // ---------- Pre-join ----------
 async function init() {
   try { st.info = await api(`/i/${token}`); }
-  catch (e) { $("#invalidMsg").textContent = e.message; return show("invalid"); }
+  catch (e) { return invalid("This link isn’t valid", e.status === 404 ? "Check that you opened the full link from your invite. If the recruiter reset your interview, they sent you a new one." : e.message); }
   const info = st.info;
   if (info.interview) {
     st.view = info.interview;
     if (!live()) return finished();
+  } else {
+    // The server's clock decides when the window opens, not the device's.
+    const skew = new Date(info.server_time) - Date.now();
+    if (info.closes_at && new Date(info.closes_at) - skew < Date.now()) return invalid("This interview link has expired", "Ask the recruiter for a new link.");
+    if (info.opens_at && new Date(info.opens_at) - skew > Date.now()) return waitForOpening(info, skew);
   }
   st.resumeOk = info.has_resume || !!info.interview;
   $("#pjTitle").textContent = info.interview ? "Rejoin your interview" : `Hi ${info.name.split(" ")[0]}, ready to join?`;
   const item = (k, v) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
   $("#pjMeta").innerHTML = item("Role", info.role_title) + (info.company ? item("Company", info.company) : "") + item("Length", `About ${info.minutes} min`);
   $("#resumeBox").classList.toggle("hidden", st.resumeOk);
+  $("#consentText").textContent = `I agree to an interview led by an AI interviewer. My answers are transcribed and shared with the hiring team. My camera stays on this device and is not recorded. ${info.strict
+    ? "This interview runs in full screen; copying, pasting and right-click are turned off, and leaving full screen pauses it. Leaving the tab and browser extensions are noted for the hiring team."
+    : "Leaving the tab or full screen, copying or pasting, and browser extensions are noted for the hiring team."}`;
   show("prejoin");
-  await openDevices();
+  runChecks(openDevices()); // the microphone prompt can wait on the candidate; the other checks don't
+}
+
+// A scheduled interview that has not opened yet: count down, then show the lobby.
+function waitForOpening(info, skew) {
+  show("waiting");
+  $("#waitMsg").textContent = `Your ${info.role_title} interview opens ${when(info.opens_at)}. Keep this page open; the lobby opens by itself at that time.`;
+  const tick = setInterval(() => {
+    const left = (new Date(info.opens_at) - skew - Date.now()) / 1000;
+    if (left <= 0) { clearInterval(tick); location.reload(); return; }
+    $("#waitClock").textContent = left > 3600 ? `${Math.floor(left / 3600)} h ${Math.floor((left % 3600) / 60)} min` : fmt(left);
+  }, 1000);
+}
+
+// What the lobby checks, shown as a list. In strict mode a detected extension stops the join button.
+async function runChecks(devices) {
+  const strict = st.info.strict;
+  st.checksOk = false; // Join waits for the extension check
+  const draw = () => ($("#checks").innerHTML = rows.map(([ok, text]) => `<li class="${ok === null ? "" : ok ? "ok" : "bad"}"><span class="dot" aria-hidden="true"></span>${esc(text)}</li>`).join(""));
+  const rows = [[null, "Waiting for microphone permission..."], [null, "Checking browser extensions..."]];
+  if (strict) rows.push([null, "Full screen starts when you join"]);
+  if (strict && MOBILE) rows.push([false, "This interview needs a computer: phones can't hold full screen"]);
+  draw();
+  devices.then(() => {
+    const mic = !!stream?.getAudioTracks().length;
+    rows[0] = [mic, mic ? "Microphone works" : "No microphone: you can type your answers instead"];
+    draw();
+  });
+  st.extensions = await checkExtensions();
+  rows[1] = st.extensions.length
+    ? [!strict, `${strict ? "Turn off for this site, then reload" : "Extensions noted for the hiring team"}: ${st.extensions.join(", ")}`]
+    : [true, "No extensions detected (a page can't see every kind)"];
+  draw();
+  st.checksOk = !(strict && (st.extensions.length || MOBILE));
   updateJoin();
 }
 
@@ -67,7 +111,7 @@ async function openDevices() {
   const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
   // Camera is off by default and only requested when the candidate turns it on.
   try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
-  catch { $("#pjStatus").textContent = "No microphone access. You can still join and type your answers."; return; }
+  catch { return; } // the lobby's check list says so, and typing still works
   $("#preview").srcObject = stream;
   setCam(false);
   audioCtx = new AudioContext();
@@ -87,7 +131,7 @@ function level() {
   return Math.sqrt(sum / buf.length);
 }
 
-function updateJoin() { $("#joinBtn").disabled = !($("#consent").checked && st.resumeOk); }
+function updateJoin() { $("#joinBtn").disabled = !($("#consent").checked && st.resumeOk && st.checksOk !== false); }
 $("#consent").addEventListener("change", updateJoin);
 
 async function uploadResume(file) {
@@ -143,12 +187,17 @@ $("#joinBtn").addEventListener("click", async (e) => {
   $("#pjStatus").textContent = "Connecting...";
   try {
     await audioCtx?.resume();
+    const full = await enterFullscreen(); // from the click, so the browser allows it; standard mode can decline
+    if (st.info.strict && !full) throw new Error("This interview runs in full screen. Allow full screen and press Join again.");
     releaseMic(); // let the phone settle on the loudspeaker while the interview loads
-    if (!st.view) st.view = await api(`/i/${token}/start`, { method: "POST" });
-    await enterFullscreen(); // from the click, so the browser allows it; declining is fine
+    st.view = await api(`/i/${token}/start`, { method: "POST", body: { extensions: st.extensions, fullscreen: full } });
     enterCall();
     startIntegrity();
-  } catch (err) { $("#pjStatus").textContent = err.message; e.target.disabled = false; }
+  } catch (err) {
+    $("#pjStatus").textContent = err.status === 503 ? `${err.message} The page will try again when you press Join.` : err.message;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    e.target.disabled = false;
+  }
 });
 
 // ---------- Call ----------
@@ -174,8 +223,20 @@ function startIntegrity() {
     clock: () => st.view.elapsed_sec + (Date.now() - st.syncedAt) / 1000,
     send: (events, keepalive) => fetch(`/api/i/${token}/events`, { method: "POST", keepalive, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events }) }),
     notify: (msg) => { $("#notice").textContent = msg; $("#notice").classList.remove("hidden"); clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $("#notice").classList.add("hidden"), 6000); },
+    strict: st.info.strict,
+    onFullscreen: (full) => st.info.strict && pause(!full),
   });
 }
+
+// Strict mode: leaving full screen pauses the interview (no listening, no speaking) until the candidate returns.
+function pause(on) {
+  if (!live() || on === st.paused) return;
+  st.paused = on;
+  $("#paused").classList.toggle("hidden", !on);
+  if (on) { stopRecording(false); agentAudio?.pause(); speechSynthesis?.cancel(); stopVoice(); setPhase("idle"); }
+  else listen();
+}
+$("#resumeFull").addEventListener("click", () => enterFullscreen());
 
 function setView(v) { st.view = v; st.syncedAt = Date.now(); drawParts(); }
 
@@ -234,6 +295,7 @@ function speakTurn(turn) {
   setPhase("speaking");
   caption("Interviewer", turn.text);
   const after = () => { stopVoice(); agentAudio = null; if (live()) listen(); else finished(); };
+  if (!st.info.voice) return browserVoice(turn.text, after); // no voice service configured: skip the request
   agentAudio = new Audio(`/api/i/${token}/tts/${turn.turn_id}`);
   if (audioCtx) {
     const an = audioCtx.createAnalyser();
@@ -251,7 +313,7 @@ function speakTurn(turn) {
 }
 
 function browserVoice(text, after) {
-  // Fallback when Piper is unavailable.
+  // When the voice service is off or fails: the browser's own voice (it differs by browser and system).
   if (!window.speechSynthesis) return after();
   const u = new SpeechSynthesisUtterance(text);
   animateVoice(null);
@@ -265,7 +327,7 @@ function listen() {
     acquireMic().then((ok) => ok ? listen() : (caption("", "Microphone unavailable. Use Type to answer."), setPhase("idle")));
     return;
   }
-  if (!live()) return;
+  if (!live() || st.paused) return;
   if (!st.micOn || !stream) return setPhase("idle");
   setPhase("listening");
   const chunks = [];
@@ -316,7 +378,7 @@ async function sendAudio(blob, mime) {
   const fd = new FormData();
   fd.append("audio", blob, `answer.${mime.includes("mp4") ? "mp4" : "webm"}`);
   try { handleReply(await postForm(`/i/${token}/audio`, fd)); }
-  catch (e) { caption("", e.message); setTimeout(listen, 1500); }
+  catch (e) { if (e.status === 409) return otherTab(e.message); caption("", e.message); setTimeout(listen, 1500); }
 }
 
 async function sendText(text) {
@@ -328,7 +390,14 @@ async function sendText(text) {
   caption("You", text);
   stopVoice();
   try { handleReply({ user_text: text, ...(await api(`/i/${token}/turn`, { method: "POST", body: { text } })) }); }
-  catch (e) { caption("", e.message); setPhase("idle"); }
+  catch (e) { if (e.status === 409) return otherTab(e.message); caption("", e.message); setPhase("idle"); }
+}
+
+// Another tab or device took over this interview: stop here instead of fighting over the transcript.
+function otherTab(msg) {
+  stopRecording(false); agentAudio?.pause(); stopMonitor?.();
+  stream?.getTracks().forEach((t) => t.stop());
+  invalid("This interview is open somewhere else", msg);
 }
 
 function handleReply(r) {
@@ -402,6 +471,9 @@ $("#endBtn").addEventListener("click", async () => {
 
 function finished() {
   stopRecording(false);
+  stopMonitor?.();
+  $("#paused").classList.add("hidden");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   stream?.getTracks().forEach((t) => t.stop());
   show("finished");
   $(st.info?.rated ? "#rated" : "#rateForm").classList.remove("hidden");

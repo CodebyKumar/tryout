@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="TryOut">
+  <!-- The T is a speech bubble (the interview), and the yellow bar is the highlighter on a quoted answer (the evidence). -->
+  <rect width="32" height="32" rx="8" fill="#2f5bea"/>
+  <path d="M8 9.5h16v3.6h-6.2V21l-3.6 3.2V13.1H8z" fill="#fff"/>
+  <rect x="8" y="18.2" width="5" height="3" rx="1" fill="#f6dd6e"/>
+</svg>

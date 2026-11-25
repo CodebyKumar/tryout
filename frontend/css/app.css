@@ -295,6 +295,74 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
 
 /* ---------- download: the print document replaces the screen ---------- */
 .print-report { display: none; }
+/* ---------- v2: brand, account, notices ---------- */
+.brand { gap: var(--space-xs); color: var(--color-ink); }
+.logo-mark { width: 26px; height: 26px; flex: none; }
+.account { margin-top: auto; display: flex; flex-direction: column; gap: var(--space-2xs); padding-top: var(--space-sm); border-top: var(--rule-hair) solid var(--color-rule); }
+.who { display: flex; flex-direction: column; padding-inline: var(--space-xs); min-width: 0; }
+.who .name { font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; }
+.who .sub { font-size: var(--text-sm); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; }
+.account .btn { justify-content: flex-start; }
+.account-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-xl); background: var(--color-accent-wash); border-bottom: var(--rule-hair) solid var(--color-rule); font-size: var(--text-sm); }
+.account-notice[hidden] { display: none; }
+
+/* ---------- v2: invite, schedule, settings ---------- */
+.segmented { display: inline-flex; gap: var(--space-3xs); padding: var(--space-3xs); border-radius: var(--radius-input); background: var(--color-paper-2); }
+.segmented .btn { border-color: transparent; background: transparent; }
+.segmented .btn.sel { background: var(--color-surface); border-color: var(--color-rule-2); }
+.message { border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-input); background: var(--color-paper); max-height: 320px; overflow: auto; }
+.message-subject { padding: var(--space-xs) var(--space-sm); border-bottom: var(--rule-hair) solid var(--color-rule); font-weight: 500; }
+.message-body { margin: 0; padding: var(--space-sm); font: 400 var(--text-sm)/1.55 var(--font-body); white-space: pre-wrap; }
+.dialog-actions.wrap { flex-wrap: wrap; }
+.schedule { border-top: var(--rule-hair) solid var(--color-rule); padding-top: var(--space-sm); }
+.schedule summary { cursor: pointer; font-weight: 500; font-size: var(--text-sm); }
+.schedule .fields { margin-top: var(--space-sm); }
+.choice { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
+.choice legend { font-weight: 500; margin-bottom: var(--space-xs); padding: 0; }
+.option { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-sm); align-items: start; padding: var(--space-sm); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-input); font-weight: 400; cursor: pointer; }
+.option:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-wash); }
+.option input { width: auto; min-height: 0; margin-top: 4px; }
+.option b { display: block; font-weight: 600; }
+.option span { font-size: var(--text-sm); color: var(--color-ink-2); }
+.danger-zone { margin-top: var(--space-lg); }
+.plan-body { margin-top: var(--space-lg); }
+.decision-log { margin: calc(-1 * var(--space-sm)) 0 var(--space-md); }
+.pane-note { margin-bottom: var(--space-md); max-width: 70ch; }
+
+/* ---------- v2: trace ("How it decided") ---------- */
+.trace { list-style: none; margin: 0; padding: 0; }
+.trace-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--space-md); padding: var(--space-md) 0; border-top: var(--rule-hair) solid var(--color-rule); }
+.trace-body { display: grid; gap: var(--space-2xs); }
+.trace-body .who { display: inline-block; min-width: 96px; font-weight: 500; color: var(--color-muted); font-size: var(--text-sm); }
+.trace-said { color: var(--color-ink-2); }
+.trace-decision, .trace-override, .trace-cost { font-size: var(--text-sm); }
+.trace-override { color: var(--color-error); }
+.trace-cost { color: var(--color-muted); }
+.trace-proposal summary { cursor: pointer; font-size: var(--text-sm); color: var(--color-ink-2); }
+.trace-proposal pre { margin: var(--space-xs) 0 0; padding: var(--space-sm); background: var(--color-paper-2); border-radius: var(--radius-input); font: 400 var(--text-xs)/1.5 var(--font-outlier); overflow-x: auto; }
+
+/* ---------- v2: small screens ---------- */
+@media (max-width: 60rem) {
+  .side { gap: var(--space-sm); flex-wrap: wrap; }
+  .account { margin: 0 0 0 auto; padding: 0; border: 0; flex-direction: row; align-items: center; }
+  .who { display: none; }
+  .account-notice { padding-inline: var(--space-md); flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 40rem) {
+  .page-head { flex-wrap: wrap; }
+  .page-head .actions { width: 100%; }
+  /* the candidate table becomes one card per candidate: each cell labelled, actions on their own line */
+  .table.candidates thead { display: none; }
+  .table.candidates, .table.candidates tbody, .table.candidates tr, .table.candidates td { display: block; width: 100%; }
+  .table.candidates tr { padding: var(--space-sm) 0; border-top: var(--rule-hair) solid var(--color-rule); }
+  .table.candidates td { border: 0; padding: var(--space-3xs) 0; text-align: left; }
+  .table.candidates td[data-label]:not([data-label="Candidate"])::before { content: attr(data-label); display: inline-block; min-width: 104px; color: var(--color-muted); font-size: var(--text-sm); }
+  .table.candidates td.check:empty { display: none; }
+  .table.candidates td.end { display: flex; flex-wrap: wrap; gap: var(--space-2xs); justify-content: flex-start; }
+  .trace-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
+  .dialog-actions.wrap .btn { flex: 1 1 auto; }
+}
+
 @media print {
   @page { margin: 16mm; }
   body.app { padding-left: 0; background: var(--color-surface); -webkit-print-color-adjust: exact; print-color-adjust: exact; }

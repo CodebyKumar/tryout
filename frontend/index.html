@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TryOut - AI screening interviews that show their working</title>
+  <meta name="description" content="TryOut runs a short voice interview for a role you describe, follows up on vague answers, and scores each criterion only with a quote the candidate actually said.">
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body class="site">
+  <header class="site-top">
+    <a class="brand" href="/" aria-label="TryOut home" data-brand>TryOut</a>
+    <nav class="site-nav" aria-label="Account"><a class="btn quiet" href="/login" id="signIn">Sign in</a><a class="btn" href="/signup" id="signUp">Create account</a></nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-text">
+        <h1>Screening interviews that show their working.</h1>
+        <p class="lead">TryOut runs a short voice interview for a role you describe, follows up on vague answers, and scores each criterion only with a quote the candidate actually said. You read the evidence and decide.</p>
+        <div class="row">
+          <button type="button" class="btn primary big" id="demo">Try the demo</button>
+          <a class="btn big" href="/signup">Create account</a>
+        </div>
+        <p class="hint" id="demoStatus" role="status"></p>
+      </div>
+
+      <figure class="evidence-card" aria-label="An excerpt from a TryOut report">
+        <div class="ec-head">
+          <div><h2>Production reliability</h2><span class="pill above">Above the bar</span></div>
+          <p class="ec-score"><span class="fig">8</span><span class="unit"> / 10</span></p>
+        </div>
+        <p class="ec-why">Shares a specific incident, root-cause analysis, and a measurable reduction in failed payouts.</p>
+        <blockquote class="ec-line">
+          <span class="ec-time mono">00:17</span>
+          <p><span class="who">Riya</span>I owned the design of the retry mechanism, specifically implementing idempotency keys in a Postgres unique index alongside exponential backoff and a Kafka dead-letter queue. I also <mark>led the debugging of a critical double-payout incident in 2024</mark>, where I fixed the issue by enforcing an idempotency check before the payout call.</p>
+        </blockquote>
+        <figcaption>From the demo interview. The quote was found in the transcript, so this rating counts toward the score. The candidate was played by a second AI; the interviewer and the scoring are the real system.</figcaption>
+      </figure>
+    </section>
+
+    <section class="band">
+      <h2>How one interview runs</h2>
+      <ol class="steps">
+        <li><h3>Describe the role</h3><p>Paste a job description or start from a template. The AI drafts the interview plan, with timed parts and what to find out in each, and a weighted scoring rubric. You can edit both.</p></li>
+        <li><h3>Invite candidates</h3><p>Each candidate gets a private link, open any time or within a window you set. Invite opens a ready-to-send message in your Gmail, with a calendar file for scheduled interviews.</p></li>
+        <li><h3>The candidate talks with the interviewer</h3><p>A voice conversation in the browser, as long as the role sets. It asks about their resume, follows up when an answer is vague, and keeps each part to its time. Typing works too.</p></li>
+        <li><h3>You read the report and decide</h3><p>Each criterion has a rating, a score out of 10 and the quotes behind it, linked to the transcript. The AI suggests advance, hold or reject. The decision is yours.</p></li>
+      </ol>
+    </section>
+
+    <section class="band split">
+      <div>
+        <h2>The AI proposes. Code decides.</h2>
+        <p>The language model writes the questions and reads the answers. The rules that make every candidate's interview comparable are ordinary code, and each turn records which was which.</p>
+      </div>
+      <dl class="who-does">
+        <div><dt>The model</dt><dd>Drafts the plan from the job description, reads the resume for claims worth checking, writes each follow-up, and rates each criterion with quotes.</dd></div>
+        <div><dt>The code</dt><dd>Decides when to move to the next part, how many follow-ups a topic gets and how much time is left. Checks that each quote really is in the transcript, computes the weighted score and the suggestion, and replaces any reply that tells the candidate whether they were right.</dd></div>
+        <div><dt>The record</dt><dd>The report's "How it decided" tab shows, for every answer, what the model proposed, what the code kept or overrode, and how long it took.</dd></div>
+      </dl>
+    </section>
+
+    <section class="band split">
+      <div>
+        <h2>Integrity checks, stated plainly</h2>
+        <p>The interview room notes what a browser can see and shows it on the report. These signals are context for a person. They are never part of the score.</p>
+      </div>
+      <dl class="who-does">
+        <div><dt>Noted</dt><dd>Leaving the tab or window, leaving full screen, copying and pasting, a second screen, and browser extensions that write into the page.</dd></div>
+        <div><dt>Strict mode</dt><dd>A per-role setting: full screen to start, a pause whenever the candidate leaves it, copy, paste and right-click turned off, and no start while a detectable extension is on.</dd></div>
+        <div><dt>Not possible</dt><dd>A web page cannot list every extension, switch them off, or see a phone on the desk. The lobby and the report say so.</dd></div>
+      </dl>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <span class="brand" data-brand>TryOut</span>
+    <p>A portfolio project. It runs on free tiers, so only a few interviews can run at the same time.</p>
+  </footer>
+  <script type="module" src="/static/js/site/home.js"></script>
+</body>
+</html>
