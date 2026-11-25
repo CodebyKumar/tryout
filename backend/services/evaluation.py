@@ -1,26 +1,36 @@
-"""Evaluation: run the Evaluator on a finished interview, in the background or on request. Every run is kept."""
+"""Evaluation: run the Evaluator on a finished interview, as a background job or on the recruiter's request.
+Every run is kept; the latest good one is current."""
 
-import asyncio
 import logging
+from datetime import timedelta
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
-from .. import db
+from .. import config, db
 from .. import tables as t
 from ..agents import evaluator
 from ..integrations.llm import LLMError
-from ..models import new_id
-from . import Invalid, candidates, locks, roles, sessions
+from ..models import new_id, now
+from . import Conflict, Invalid, candidates, jobs, locked, roles, sessions
 
 log = logging.getLogger("evaluation")
-_tasks: set[asyncio.Task] = set()  # shortcut: lost on restart (audit A3); Phase 5 moves this to the jobs table
 
 
-async def run(candidate_id: str, session_id: str) -> None:
-    """Never raises on LLM failure: the session is marked EVAL_FAILED with the reason; the transcript and any
-    earlier report are kept. Scores against the brief version the candidate was interviewed on (audit A2)."""
-    async with locks[f"eval_{session_id}"]:
+async def run(session_id: str) -> bool:
+    """Score one interview. Never raises on LLM failure: the session is marked EVAL_FAILED with the reason, and the
+    transcript and any earlier report are kept. Returns False on failure so the job is retried. Scores against the
+    brief version the candidate was interviewed on (audit A2).
+
+    Holds the candidate's lock, so a reset or delete waits for it, and a run after a delete finds nothing (A4)."""
+    async with db.transaction() as s:
+        row = await s.get(t.Session, session_id)
+    if row is None:
+        return True  # deleted or reset meanwhile: nothing left to score
+    candidate_id = row.data["candidate_id"]
+    async with locked(candidate_id):
         async with db.transaction() as s:
+            if await s.get(t.Session, session_id) is None:
+                return True
             session = await sessions.load(s, session_id)
             plan = await candidates.load_plan(s, session.plan_id)
             role = await roles.load_version(s, plan.role_version_id)
@@ -54,24 +64,53 @@ async def run(candidate_id: str, session_id: str) -> None:
                 )
             )
             cand = await candidates.load(s, candidate_id)
-            if cand.status in ("invited", "in_progress"):
-                cand.status = "completed"
-                await candidates.save(s, cand)
+            cand.status = "completed"
+            await candidates.save(s, cand)
+    return report is not None
 
 
-def run_later(candidate_id: str, session_id: str) -> None:
-    task = asyncio.create_task(run(candidate_id, session_id))
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
+jobs.HANDLERS["evaluate"] = run
 
 
-async def rerun(candidate_id: str) -> None:
+async def rerun(owner: str, candidate_id: str) -> None:
+    """The recruiter asks for a fresh score now (after a failure, or after a prompt change). Runs in the request."""
     async with db.transaction() as s:
-        cand = await candidates.load(s, candidate_id)
+        cand = await candidates.load(s, candidate_id, owner=owner)
     if not cand.session_id:
         raise Invalid("This candidate has not been interviewed yet")
-    await run(candidate_id, cand.session_id)
     async with db.transaction() as s:
         session = await sessions.load(s, cand.session_id)
-    if session.state == "EVAL_FAILED":
+    if session.state in ("INTERVIEWING", "WRAPUP"):
+        raise Invalid("The interview is still running")
+    if not await run(cand.session_id):
+        async with db.transaction() as s:
+            session = await sessions.load(s, cand.session_id)
         raise LLMError(f"Evaluation failed: {session.eval_error}")
+
+
+async def sweep_idle() -> None:
+    """End interviews nobody has answered for IDLE_MINUTES (closed tab, lost network) and queue their evaluation."""
+    cutoff = now() - timedelta(minutes=config.IDLE_MINUTES)
+    async with db.transaction() as s:
+        idle = (
+            await s.scalars(
+                select(t.Session.id).where(
+                    t.Session.state.in_(("INTERVIEWING", "WRAPUP")), t.Session.last_activity_at < cutoff
+                )
+            )
+        ).all()
+    for session_id in idle:
+        try:
+            async with db.transaction() as s:
+                session = await sessions.load(s, session_id)
+                session.state, session.current_section_id = "EVALUATING", None
+                await sessions.save(s, session)
+                jobs.enqueue(s, "evaluate", session_id)
+            log.info("ended idle interview %s", session_id)
+        except Conflict:  # an answer arrived meanwhile: the interview is not idle after all
+            log.info("idle sweep skipped %s", session_id)
+    if idle:
+        jobs.wake()
+
+
+jobs.SWEEPS.append(sweep_idle)

@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+from backend import config
 from backend.agents.turn_agent.spec import SlotUpdate
 from backend.engine.state_machine import FALLBACK_SAY, _apply_updates, new_session, start
 from backend.integrations.llm import LLMError
@@ -65,3 +66,22 @@ def test_engine_has_no_llm_imports():  # 2.7: the engine is pure code, testable 
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "[]"
+
+
+async def test_turn_agent_context_stays_bounded_on_long_interviews(plan, fake_llm, monkeypatch):  # R6
+    """Slots are the memory, not the transcript: the Turn Agent's input at turn 40 is about the size of turn 5."""
+    monkeypatch.setattr(config, "MAX_PROBES_PER_SECTION", 100)  # keep it in one section for 40 answers
+    n = iter(range(1000))
+    fake_llm.handlers["turn_agent"] = lambda s, u: {
+        "ack": "Okay.",
+        "probe_question": f"What about topic{(k := next(n))} and area{k}?",
+    }
+    session = new_session(plan)
+    start(plan, session)
+    sizes = []
+    for i in range(40):
+        await handle_user_turn(plan, session, f"Answer {i}: " + "I worked on the payments service. " * 8)
+        sizes.append(len(fake_llm.calls[-1][1]))
+    assert session.state == "INTERVIEWING" and len(session.turns) > 80
+    assert sizes[-1] <= sizes[4] * 1.15
+    assert sizes[-1] / 4 < 2500  # about 4 characters per token: well under the turn model's context

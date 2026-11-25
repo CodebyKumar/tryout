@@ -62,14 +62,19 @@ class Criterion(BaseModel):
     below_bar: str = ""
 
 
+Integrity = Literal["standard", "strict"]
+
+
 class Role(BaseModel):
     role_id: str = Field(default_factory=lambda: new_id("r"))
+    recruiter_id: str = ""  # the owner; set when the role is first saved
     title: str
     company: str = ""
     jd: str  # the job description, or the AI's summary of an uploaded document
     document: str = ""  # the recruiter's uploaded document as they wrote it
     notes: str = ""
     time_budget_sec: int = config.TIME_BUDGET_SEC
+    integrity: Integrity = "standard"  # strict: full screen required, copy and paste blocked, extension check
     sections: list[Section] = []
     criteria: list[Criterion] = []
     usage: list[Usage] = []  # LLM calls not yet saved
@@ -78,7 +83,8 @@ class Role(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
-CandidateStatus = Literal["invited", "in_progress", "completed", "advanced", "hold", "rejected"]
+CandidateStatus = Literal["invited", "in_progress", "completed"]  # where the interview is
+Decision = Literal["advanced", "hold", "rejected"]  # what the recruiter chose, only after a report
 
 
 class Candidate(BaseModel):
@@ -89,6 +95,9 @@ class Candidate(BaseModel):
     email: str = ""
     resume: str = ""
     status: CandidateStatus = "invited"
+    decision: Decision | None = None
+    opens_at: datetime | None = None  # scheduled start; None: any time until closes_at
+    closes_at: datetime | None = None  # the link stops working; set from LINK_DAYS when not given
     session_id: str | None = None
     plan_id: str | None = None
     created_at: datetime = Field(default_factory=now)
@@ -161,6 +170,7 @@ class Turn(BaseModel):
     ts: datetime = Field(default_factory=now)
     section_id: str | None = None
     fallback: bool = False  # the LLM failed and the agent asked the candidate to repeat
+    trace: dict | None = None  # agent turns: what the Turn Agent proposed and what code decided
 
 
 class Flag(BaseModel):
@@ -174,10 +184,12 @@ class IntegrityEvent(BaseModel):
     """A browser signal from the candidate's room (HackerEarth Smart Browser / HackerRank Proctor Mode style).
     Shown to the recruiter for context, never scored and never read by the evaluator."""
 
-    kind: Literal["tab_hidden", "window_blur", "fullscreen_exit", "paste", "copy", "multi_screen"]
+    kind: Literal[
+        "tab_hidden", "window_blur", "fullscreen_exit", "paste", "copy", "multi_screen", "extension", "blocked"
+    ]
     at_sec: float = Field(ge=0, le=86400)  # seconds into the interview
     seconds: float = Field(default=0, ge=0, le=86400)  # how long away, for the "away" kinds
-    detail: str = Field(default="", max_length=120)  # e.g. "42 characters"; never the pasted text itself
+    detail: str = Field(default="", max_length=120)  # "42 characters", an extension's name; never pasted text
 
 
 # ---------- Report ----------
@@ -227,6 +239,8 @@ class Session(BaseModel):
     plan_id: str
     candidate_id: str
     state: SessionState = "READY"
+    version: int = 0  # the database row version this copy was read at; 0: not saved yet
+    client_id: str = ""  # the browser tab holding the interview; another tab gets 409 while this one is active
     created_at: datetime = Field(default_factory=now)
     started_at: datetime | None = None
     last_tick_at: datetime | None = None

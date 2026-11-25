@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim]
+# One command to run the app.  ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim|seed-demo|migrate]
 set -euo pipefail
 cd "$(dirname "$0")"
+export PYTHONPYCACHEPREFIX="$PWD/.venv/.pycache"  # compiled Python stays inside .venv, not next to the code
 
 PORT="${PORT:-8000}"
 RUN_DIR=".run"
@@ -72,5 +73,7 @@ case "${1:-start}" in
   test) uv run pytest -q ;;
   lint) uv run ruff check && uv run ruff format --check ;;
   sim) uv run python scripts/simulate.py "${@:2}" ;;
-  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim [persona]]"; exit 1 ;;
+  seed-demo) uv run python scripts/simulate.py seed-demo ;;
+  migrate) uv run alembic -c migrations/alembic.ini upgrade head ;;
+  *) echo "Usage: ./run.sh [start|stop|restart|status|logs|share|dev|test|lint|sim [persona]|seed-demo|migrate]"; exit 1 ;;
 esac

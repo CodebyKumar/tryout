@@ -1,10 +1,13 @@
+import asyncio
 import io
 import zipfile
 
 import pytest
 from conftest import ROLE
+from sqlalchemy import select
 
-from backend import config
+from backend import config, db
+from backend import tables as t
 from backend.agents.base import render
 from backend.agents.role_compiler import CompiledRole, apply_compiled
 from backend.integrations.documents import extract_text
@@ -41,12 +44,19 @@ def test_default_length_comes_from_env(client):  # B8
     assert role["time_budget_sec"] == config.TIME_BUDGET_SEC
 
 
+async def _scalar(q):
+    async with db.transaction() as s:
+        return await s.scalar(q)
+
+
 def test_original_document_is_kept(client):  # B13
     c, llm = client
     llm.handlers["role_compiler"] = lambda s, u: ROLE | {"jd_summary": "Short summary"}
     doc = "Backend Engineer at Acme Pay. Build settlement and payouts. Interview for 20 minutes. " * 2
     role = c.post("/api/roles/from-document", data={"text": doc}).json()
-    assert role["jd"] == "Short summary" and role["document"] == doc.strip()
+    assert role["jd"] == "Short summary" and "document" not in role  # kept, but not sent back with every role
+    stored = asyncio.run(_scalar(select(t.Document.text).where(t.Document.role_id == role["role_id"])))
+    assert stored == doc.strip()
 
 
 def test_manual_edit_is_validated(client):  # B9

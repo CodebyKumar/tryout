@@ -22,7 +22,7 @@ from backend import config as app_config  # noqa: E402
 from backend.tables import Base  # noqa: E402
 
 target_metadata = Base.metadata
-# The URL comes from .env, never from alembic.ini (it holds the password). % is escaped for configparser.
+# The URL comes from .env, never from alembic.ini. % is escaped for configparser.
 config.set_main_option("sqlalchemy.url", app_config.DATABASE_URL.replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,

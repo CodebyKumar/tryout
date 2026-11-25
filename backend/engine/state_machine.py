@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from ..models import Flag, InterviewPlan, SectionState, Session, SlotState, Turn, now
 from ..safety import pii
 from . import policy
-from .heuristics import fresh_ack, recent_agent, similar
+from .heuristics import NEUTRAL_ACK, fresh_ack, judges_answer, recent_agent, similar
 
 if TYPE_CHECKING:
     from ..agents.turn_agent import TurnOut
@@ -130,20 +130,26 @@ def fallback(session: Session) -> dict:
 
 
 def apply_turn(plan: InterviewPlan, session: Session, user_turn: Turn, out: "TurnOut") -> dict:
-    """The agent proposed; code decides what is recorded and what is said next."""
+    """The agent proposed; code decides what is recorded and what is said next. The result's "overrides" lists
+    where code changed the proposal and "decision" why the next question is what it is (for the trace page)."""
     _apply_updates(plan, session, out.slot_updates, user_turn.turn_id)
+    overrides = []
+    ack = fresh_ack(out.ack.strip(), session)
     if out.injection_suspected:
         session.flags.append(
             Flag(type="injection", subtype="prompt_injection", turn_id=user_turn.turn_id, text=user_turn.text[:200])
         )
-    ack = fresh_ack(out.ack.strip(), session)
+        ack, overrides = "Let's keep to the interview.", ["injection: acknowledgment replaced"]
+    elif judges_answer(ack):
+        ack, overrides = NEUTRAL_ACK, ["verdict in acknowledgment replaced"]
     if ack and ack[-1] not in ".!?":
         ack += "."
     if out.user_wants_stop:
-        return end(session, ack)
-    say = f"{ack} {_next_question(plan, session, out)}".strip()
+        return {**end(session, ack), "decision": "candidate asked to stop", "overrides": overrides}
+    question, decision = _next_question(plan, session, out)
+    say = f"{ack} {question}".strip()
     agent_turn = _say(session, say)
-    return {"say": say, "turn_id": agent_turn.turn_id, "done": False}
+    return {"say": say, "turn_id": agent_turn.turn_id, "done": False, "decision": decision, "overrides": overrides}
 
 
 def end(session: Session, ack: str) -> dict:
@@ -153,24 +159,32 @@ def end(session: Session, ack: str) -> dict:
     return {"say": agent_turn.text, "turn_id": agent_turn.turn_id, "done": True}
 
 
-def _next_question(plan: InterviewPlan, session: Session, out: "TurnOut") -> str:
-    """Code decides whether to stay or move on, so the spoken question always matches the active topic."""
+def _next_question(plan: InterviewPlan, session: Session, out: "TurnOut") -> tuple[str, str]:
+    """Code decides whether to stay or move on, so the spoken question always matches the active topic.
+    Returns the question and the reason for it."""
     cur = plan.section(session.current_section_id)
     st = session.sections[cur.section_id]
     probe, skip = out.probe_question.strip(), out.user_wants_skip
+    reason = "candidate asked to skip" if skip else ""
     if probe and any(similar(probe, q) for q in recent_agent(session)):
         probe, skip = "", True  # never ask the same thing twice; move on instead of looping
+        reason = "proposed follow-up repeats an earlier question"
     open_optional = any(
         not s.required and not policy.is_resolved(st.slots[s.slot_id]) and policy.probes_left(st.slots[s.slot_id])
         for s in cur.slots
     )
     topic_done = policy.coverage(cur, st) >= 1
-    advance = policy.must_move_on(plan, session, cur) or skip or (topic_done and (not probe or not open_optional))
+    limit = policy.must_move_on(plan, session, cur)
+    advance = limit or skip or (topic_done and (not probe or not open_optional))
+    if limit:
+        reason = "time or follow-up limit for this section"
+    elif advance and not skip:
+        reason = "section covered"
 
     if not advance:
         if not probe:
             # The agent had nothing worth asking here: move on rather than asking a vague "tell me more".
-            advance = True
+            advance, reason = True, "no follow-up proposed"
         if not advance:
             gap_slot = st.slots.get(out.gap.slot_id) if out.gap else None
             if not gap_slot or policy.is_resolved(gap_slot):
@@ -186,7 +200,7 @@ def _next_question(plan: InterviewPlan, session: Session, out: "TurnOut") -> str
             if gap_slot:
                 gap_slot.probes += 1
             st.probe_count += 1
-            return probe
+            return probe, "follow-up on a gap"
 
     planned_next = policy.next_section(plan, session, exclude=cur.section_id)
     _advance(plan, session)
@@ -198,7 +212,10 @@ def _next_question(plan: InterviewPlan, session: Session, out: "TurnOut") -> str
         and (nxt is planned_next or (nxt is None and planned_next is None))
         and not any(similar(bridge, q) for q in recent_agent(session))
     ):
-        return bridge
+        return bridge, reason
     if nxt:
-        return f"Okay, let's switch gears. {nxt.opening_question}"
-    return "We're almost out of time. Is there anything else you'd like the team to know about you?"
+        return f"Okay, let's switch gears. {nxt.opening_question}", f"{reason}; planned question used"
+    return (
+        "We're almost out of time. Is there anything else you'd like the team to know about you?",
+        f"{reason}; wrap-up",
+    )

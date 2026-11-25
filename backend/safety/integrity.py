@@ -12,8 +12,10 @@ def summarize(events: list[IntegrityEvent]) -> dict:
     counts = Counter(e.kind for e in events)
     away_sec = round(sum(e.seconds for e in events if e.kind in AWAY))
     times_away = sum(counts[k] for k in AWAY)
-    # A paste into a spoken interview or repeated long absences deserve a look; a second monitor alone does not.
-    level = "review" if counts["paste"] or times_away >= 3 or away_sec >= 60 else "some" if events else "none"
+    # A paste (or a blocked paste attempt) in a spoken interview, or repeated long absences, deserve a look; a second
+    # monitor or an extension alone does not.
+    pasted = counts["paste"] or any(e.kind == "blocked" and e.detail == "paste" for e in events)
+    level = "review" if pasted or times_away >= 3 or away_sec >= 60 else "some" if events else "none"
     return {
         "level": level,
         "counts": dict(counts),

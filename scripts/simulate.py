@@ -1,6 +1,7 @@
 """Full hiring flow against the real LLM with a simulated candidate. Prints transcript, report and stats.
 
-./run.sh sim [strong|vague|bluffer|injector]
+./run.sh sim [strong|vague|bluffer|injector]   runs as sim@tryout.app (an approved account, created if missing)
+./run.sh seed-demo                             fills the read-only demo account with one real interview
 """
 
 import asyncio
@@ -13,9 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
+from backend import config, db  # noqa: E402
+from backend import tables as t  # noqa: E402
+from backend.api.deps import COOKIE  # noqa: E402
 from backend.app import app  # noqa: E402
 from backend.integrations.llm import get_llm  # noqa: E402
+from backend.models import new_id  # noqa: E402
+from backend.services import accounts  # noqa: E402
 
 JD = """Backend Engineer, Payments (2-4 years). Acme Pay, Bengaluru.
 You will build and run the services that move merchant money: settlement, payouts, reconciliation.
@@ -52,6 +59,23 @@ async def candidate_reply(persona: str, question: str, history: list[str]) -> st
         agent="sim_candidate", role="aux", system=system, user=user, output=Reply, max_tokens=800, temperature=0.8
     )
     return out.reply
+
+
+async def _sign_in(email: str, name: str, status: str) -> str:
+    """A login token for an account with this status, creating the account if needed (no password can open it)."""
+    async with db.transaction() as s:
+        row = await s.scalar(select(t.Recruiter).where(t.Recruiter.email == email))
+        if row is None:
+            row = t.Recruiter(id=new_id("u"), email=email, name=name, password_hash="!")
+            s.add(row)
+        row.status = status
+        await s.flush()
+        return await accounts.new_login(s, row.id)
+
+
+async def _set_status(email: str, status: str) -> None:
+    async with db.transaction() as s:
+        (await s.scalar(select(t.Recruiter).where(t.Recruiter.email == email))).status = status
 
 
 def run(c: TestClient, persona: str):
@@ -109,5 +133,15 @@ def run(c: TestClient, persona: str):
 
 
 if __name__ == "__main__":
+    arg = sys.argv[1] if len(sys.argv) > 1 else "vague"
+    demo = arg == "seed-demo"
+    email = accounts.DEMO_EMAIL if demo else "sim@tryout.app"
+    db.configure(config.DATABASE_URL, pooled=False)  # this script uses several event loops; pooled connections can't
     with TestClient(app) as client:
-        run(client, sys.argv[1] if len(sys.argv) > 1 else "vague")
+        # Writes need an active account; the demo account is switched back to read-only when done.
+        client.cookies.set(COOKIE, asyncio.run(_sign_in(email, "TryOut demo" if demo else "Simulator", "active")))
+        try:
+            run(client, "strong" if demo else arg)
+        finally:
+            if demo:
+                asyncio.run(_set_status(email, "demo"))

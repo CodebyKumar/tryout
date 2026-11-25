@@ -2,12 +2,13 @@
 
 import asyncio
 import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
-from backend import db, tables
+from backend import config, db, tables
 from backend.agents.role_compiler import CompiledRole, apply_compiled
 from backend.app import app
 from backend.integrations.llm import FakeLLM, set_llm
@@ -168,10 +169,39 @@ def database(tmp_path):
     yield
 
 
+ADMIN = {"name": "Asha Admin", "email": "admin@example.com", "password": "correct horse"}
+
+
+def sign_up(c, name="Ravi Recruiter", email="ravi@example.com", password="correct horse"):
+    r = c.post("/api/auth/signup", json={"name": name, "email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def wait_for(fetch, done, tries=100):
+    """Poll until background jobs (prep, evaluation) have run: fetch() -> value, done(value) -> bool."""
+    for _ in range(tries):
+        value = fetch()
+        if done(value):
+            return value
+        time.sleep(0.03)
+    raise AssertionError(f"timed out waiting; last value: {value}")
+
+
 @pytest.fixture
-def client(database, fake_llm):
+def anon(database, fake_llm, monkeypatch):
+    """An app client with no one signed in."""
+    monkeypatch.setattr(config, "ADMIN_EMAIL", ADMIN["email"])
     with TestClient(app) as c:
         yield c, fake_llm
+
+
+@pytest.fixture
+def client(anon):
+    """An app client signed in as the admin, which is an active account: it can create roles and invite."""
+    c, llm = anon
+    sign_up(c, **ADMIN)
+    return c, llm
 
 
 @pytest.fixture

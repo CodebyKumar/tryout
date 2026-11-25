@@ -3,7 +3,7 @@ immutable version (audit A2): candidates keep the brief their plan was built on.
 
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from .. import config, db
 from .. import tables as t
@@ -15,6 +15,8 @@ from . import Invalid, NotFound, llm_calls
 def _role(row: t.Role, v: t.RoleVersion) -> Role:
     return Role(
         role_id=row.id,
+        recruiter_id=row.recruiter_id,
+        integrity=row.integrity,
         title=row.title,
         company=row.company,
         jd=v.jd,
@@ -28,10 +30,11 @@ def _role(row: t.Role, v: t.RoleVersion) -> Role:
     )
 
 
-async def load(s, role_id: str) -> Role:
-    """The role at its current version."""
+async def load(s, role_id: str, owner: str | None = None) -> Role:
+    """The role at its current version. With owner, someone else's role is NotFound, the same as a missing one, so
+    ids cannot be probed. Internal callers (an interview by its link, a job) pass no owner."""
     row = await s.get(t.Role, role_id)
-    if row is None:
+    if row is None or (owner is not None and row.recruiter_id != owner):
         raise NotFound("Role not found")
     v = await s.scalar(
         select(t.RoleVersion).where(t.RoleVersion.role_id == role_id, t.RoleVersion.version == row.current_version)
@@ -49,7 +52,13 @@ async def save_version(s, role: Role, source: str, instruction: str | None = Non
     row = await s.get(t.Role, role.role_id)
     if row is None:
         row = t.Role(
-            id=role.role_id, title=role.title, company=role.company, current_version=0, created_at=role.created_at
+            id=role.role_id,
+            recruiter_id=role.recruiter_id,
+            title=role.title,
+            company=role.company,
+            integrity=role.integrity,
+            current_version=0,
+            created_at=role.created_at,
         )
         s.add(row)
         await s.flush()  # no ORM relationships: insert the parent before rows that point at it
@@ -89,18 +98,38 @@ async def _create(role: Role, **compile_kw) -> Role:
         return await save_version(s, role, "compile")
 
 
-async def create(title: str, jd: str, notes: str = "", company: str = "", time_budget_sec: int = 0) -> Role:
+async def create(
+    owner: str,
+    title: str,
+    jd: str,
+    notes: str = "",
+    company: str = "",
+    time_budget_sec: int = 0,
+    integrity: str = "standard",
+) -> Role:
+    if not title.strip():
+        raise Invalid("Give the role a title")
     if len(jd.strip()) < 40:
         raise Invalid("Paste the full job description")
     budget = time_budget_sec or config.TIME_BUDGET_SEC
-    return await _create(Role(title=title, jd=jd, notes=notes, company=company, time_budget_sec=budget))
+    role = Role(
+        recruiter_id=owner,
+        title=title.strip(),
+        jd=jd.strip()[:20000],
+        notes=notes,
+        company=company.strip(),
+        time_budget_sec=budget,
+        integrity=integrity,
+    )
+    return await _create(role)
 
 
-async def from_document(text: str, title: str = "", time_budget_sec: int = 0) -> Role:
+async def from_document(owner: str, text: str, title: str = "", time_budget_sec: int = 0) -> Role:
     """One hiring document (JD, guidelines, rubric, notes); the AI builds the whole brief."""
     if len(text.strip()) < 80:
         raise Invalid("The document is too short. Include at least the job description.")
     role = Role(
+        recruiter_id=owner,
         title=title.strip() or "Untitled role",
         jd=text.strip()[:20000],
         time_budget_sec=time_budget_sec or config.TIME_BUDGET_SEC,
@@ -108,24 +137,25 @@ async def from_document(text: str, title: str = "", time_budget_sec: int = 0) ->
     return await _create(role, from_document=True, fixed_length=bool(time_budget_sec))
 
 
-async def refine(role_id: str, instruction: str) -> Role:
+async def refine(owner: str, role_id: str, instruction: str) -> Role:
     if not instruction.strip():
         raise Invalid("Describe the change you want")
     async with db.transaction() as s:
-        role = await load(s, role_id)
+        role = await load(s, role_id, owner)
     role = await _compiled(role_refine.refine_role(role, instruction))
     async with db.transaction() as s:
         return await save_version(s, role, "refine", instruction)
 
 
-_LABELS = {"title", "company"}  # stored on the role itself, not part of the brief a candidate is interviewed on
+# Stored on the role itself, not part of the brief a candidate is interviewed on, so changing one adds no version.
+_LABELS = {"title", "company", "integrity"}
 
 
-async def update(role_id: str, changes: dict) -> Role:
+async def update(owner: str, role_id: str, changes: dict) -> Role:
     """Manual edit. Same checks as AI-written briefs: unique ids, weights in range, sections fit the length.
     Only a change to the brief (sections, criteria, notes, length) makes a new version; a rename does not."""
     async with db.transaction() as s:
-        role = await load(s, role_id)
+        role = await load(s, role_id, owner)
         changes = {k: v for k, v in changes.items() if getattr(role, k) != v}
         if not changes.keys() - _LABELS:
             row = await s.get(t.Role, role_id)
@@ -148,26 +178,38 @@ async def update(role_id: str, changes: dict) -> Role:
         return await save_version(s, role, "manual")
 
 
-async def list_all() -> list[tuple[Role, list[str]]]:
-    """Every role at its current version, newest first, with its candidates' statuses."""
+async def list_all(owner: str) -> list[tuple[Role, list[tuple[str, str | None]]]]:
+    """The owner's roles at their current version, newest first, with their candidates' statuses."""
     async with db.transaction() as s:
         rows = await s.execute(
             select(t.Role, t.RoleVersion)
             .join(
                 t.RoleVersion, (t.RoleVersion.role_id == t.Role.id) & (t.RoleVersion.version == t.Role.current_version)
             )
+            .where(t.Role.recruiter_id == owner)
             .order_by(t.Role.created_at.desc())
         )
-        statuses = await s.execute(select(t.Candidate.role_id, t.Candidate.status))
-    by_role: dict[str, list[str]] = {}
-    for role_id, status in statuses:
-        by_role.setdefault(role_id, []).append(status)
+        statuses = await s.execute(
+            select(t.Candidate.role_id, t.Candidate.status, t.Candidate.decision)
+            .join(t.Role, t.Role.id == t.Candidate.role_id)
+            .where(t.Role.recruiter_id == owner)
+        )
+    by_role: dict[str, list[tuple[str, str | None]]] = {}
+    for role_id, status, decision in statuses:
+        by_role.setdefault(role_id, []).append((status, decision))
     return [(_role(r, v), by_role.get(r.id, [])) for r, v in rows]
 
 
-async def get(role_id: str) -> Role:
+async def get(owner: str, role_id: str) -> Role:
     async with db.transaction() as s:
-        return await load(s, role_id)
+        return await load(s, role_id, owner)
+
+
+async def delete_role(owner: str, role_id: str) -> None:
+    """Remove the role with its versions, candidates, interviews and reports (foreign keys cascade)."""
+    async with db.transaction() as s:
+        await load(s, role_id, owner)
+        await s.execute(delete(t.Role).where(t.Role.id == role_id))
 
 
 _TEMPLATES = Path(__file__).resolve().parent.parent / "role_templates"

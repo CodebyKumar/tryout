@@ -1,8 +1,11 @@
-"""initial schema
+"""v2 schema: accounts and login sessions, owned roles, scheduled candidates, versioned sessions, turn traces.
+
+Every table has row level security on with no policies: the app connects as the owner, and Supabase's public REST
+API (which uses the anon and authenticated roles) can read nothing.
 
 Revision ID: 0001
 Revises:
-Create Date: 2026-10-22 15:11:22.872831
+Create Date: 2026-11-25 20:54:35.917819
 
 """
 
@@ -18,9 +21,9 @@ down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-
 TABLES = [
     "recruiters",
+    "auth_sessions",
     "roles",
     "role_versions",
     "documents",
@@ -48,6 +51,7 @@ def upgrade() -> None:
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("run_after", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("status in ('queued', 'running', 'failed')", name="status"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("jobs_due", "jobs", ["status", "run_after"], unique=False)
@@ -55,22 +59,39 @@ def upgrade() -> None:
         "recruiters",
         sa.Column("id", sa.String(length=40), nullable=False),
         sa.Column("email", sa.String(length=320), nullable=False),
+        sa.Column("name", sa.Text(), nullable=False),
         sa.Column("password_hash", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=10), nullable=False),
+        sa.Column("is_admin", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("status in ('pending', 'active', 'disabled', 'demo')", name="status"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
     )
     op.create_table(
+        "auth_sessions",
+        sa.Column("token_hash", sa.String(length=64), nullable=False),
+        sa.Column("recruiter_id", sa.String(length=40), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(["recruiter_id"], ["recruiters.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("token_hash"),
+    )
+    op.create_index(op.f("ix_auth_sessions_recruiter_id"), "auth_sessions", ["recruiter_id"], unique=False)
+    op.create_table(
         "roles",
         sa.Column("id", sa.String(length=40), nullable=False),
-        sa.Column("recruiter_id", sa.String(length=40), nullable=True),
+        sa.Column("recruiter_id", sa.String(length=40), nullable=False),
         sa.Column("title", sa.Text(), nullable=False),
         sa.Column("company", sa.Text(), nullable=False),
+        sa.Column("integrity", sa.String(length=8), nullable=False),
         sa.Column("current_version", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("integrity in ('standard', 'strict')", name="integrity"),
         sa.ForeignKeyConstraint(["recruiter_id"], ["recruiters.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(op.f("ix_roles_recruiter_id"), "roles", ["recruiter_id"], unique=False)
     op.create_table(
         "candidates",
         sa.Column("id", sa.String(length=40), nullable=False),
@@ -79,8 +100,12 @@ def upgrade() -> None:
         sa.Column("email", sa.Text(), nullable=False),
         sa.Column("token", sa.String(length=64), nullable=False),
         sa.Column("status", sa.String(length=12), nullable=False),
-        sa.Column("feedback_released", sa.Boolean(), nullable=False),
+        sa.Column("decision", sa.String(length=10), nullable=True),
+        sa.Column("opens_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("closes_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("decision in ('advanced', 'hold', 'rejected')", name="decision"),
+        sa.CheckConstraint("status in ('invited', 'in_progress', 'completed')", name="status"),
         sa.ForeignKeyConstraint(["role_id"], ["roles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token"),
@@ -100,7 +125,7 @@ def upgrade() -> None:
         ),
         sa.Column("instruction", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("source in ('compile', 'refine', 'manual', 'import')", name="source"),
+        sa.CheckConstraint("source in ('compile', 'refine', 'manual')", name="source"),
         sa.ForeignKeyConstraint(["role_id"], ["roles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("role_id", "version"),
@@ -166,6 +191,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=40), nullable=False),
         sa.Column("plan_id", sa.String(length=40), nullable=False),
         sa.Column("state", sa.String(length=12), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("last_activity_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "data", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=False
@@ -235,6 +261,9 @@ def upgrade() -> None:
         sa.Column("fallback", sa.Boolean(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("section_id", sa.String(length=60), nullable=True),
+        sa.Column(
+            "trace", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=True
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["session_id"], ["sessions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -242,9 +271,7 @@ def upgrade() -> None:
     )
     # ### end Alembic commands ###
     if op.get_bind().dialect.name == "postgresql":
-        # Supabase exposes public tables through its REST API with the public anon key. The backend connects as
-        # the owner (not subject to RLS), so RLS with no policies blocks that API without affecting the app.
-        for table in TABLES:
+        for table in TABLES + ["alembic_version"]:
             op.execute(f"alter table {table} enable row level security")
 
 
@@ -280,7 +307,10 @@ def downgrade() -> None:
     op.drop_table("role_versions")
     op.drop_index(op.f("ix_candidates_role_id"), table_name="candidates")
     op.drop_table("candidates")
+    op.drop_index(op.f("ix_roles_recruiter_id"), table_name="roles")
     op.drop_table("roles")
+    op.drop_index(op.f("ix_auth_sessions_recruiter_id"), table_name="auth_sessions")
+    op.drop_table("auth_sessions")
     op.drop_table("recruiters")
     op.drop_index("jobs_due", table_name="jobs")
     op.drop_table("jobs")

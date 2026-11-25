@@ -1,9 +1,9 @@
 # Tryout - Tasks
 
-Overview: [README.md](README.md). Code map: [docs/system-design.md](docs/system-design.md).
-Why each task exists: [docs/backend-audit.md](docs/backend-audit.md) (IDs like `B1`, `D3`, `F5` point there).
-What v2 must do: [docs/requirements.md](docs/requirements.md) (IDs like `R5`, `O4` point there).
-Run: `./run.sh start | stop | restart | status | logs | dev | test | sim [persona]`.
+Overview: [README.md](../README.md). Code map: [system-design.md](system-design.md).
+Why each task exists: [backend-audit.md](backend-audit.md) (IDs like `B1`, `D3`, `F5` point there).
+What v2 must do: [requirements.md](requirements.md) (IDs like `R5`, `O4` point there).
+Run: `./run.sh start | stop | restart | status | logs | dev | test | lint | sim [persona] | seed-demo | migrate`.
 
 ## Decisions
 
@@ -100,7 +100,7 @@ HTTP handlers become thin; orchestration lives in one place. See audit 5.1 and s
 - [x] 3.2 `api/recruiter.py`, `api/candidate.py`, `api/views.py`; `app.py` only builds the app.
 - [x] 3.3 `integrations/`: `llm.py`, `groq.py` (shared transport + retry, `C9`), `stt.py` (+ noise filter), `tts.py`, `documents.py`.
 - [x] 3.4 Only `services/` calls `store.py`; routes, agents and the engine never touch storage.
-- [x] 3.5 Update [docs/system-design.md](docs/system-design.md) Part A to the new layout.
+- [x] 3.5 Update [system-design.md](system-design.md) Part A to the new layout.
 - [x] 3.6 Hard-coded values: anything a recruiter or operator would tune (probe limits, wrap-up reserve, default
   length, model limits, upload caps) moves to `config.py` or the role's policy. True constants (`_STOP`,
   `_FILLERS`, `_SCORES`, `_NOISE`, `BASE_VOCAB`, PII regexes) stay in code next to the function that uses them,
@@ -140,8 +140,8 @@ public REST API is blocked. `alembic upgrade head` applies migrations; `TEST_DAT
 
 # v2 - deployed product (planned 2026-11-25)
 
-Requirements: [docs/requirements.md](docs/requirements.md). Design (HLD and LLD):
-[docs/system-design.md Part B](docs/system-design.md#part-b---v2-design). Decisions taken 2026-11-25:
+Requirements: [requirements.md](requirements.md). Design (HLD and LLD):
+[system-design.md Part B](system-design.md#part-b---v2-design). Decisions taken 2026-11-25:
 
 - Sign-up is open, and an admin approves an account before it can run interviews. A shared demo account is read-only.
 - Frontend stays vanilla ES modules with no build step: one file per screen, a small router, a small store.

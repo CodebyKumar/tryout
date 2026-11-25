@@ -1,7 +1,7 @@
 # TryOut - Product requirements (v2)
 
 Recorded 2026-11-25 from the owner's brief. This is the source of truth for what v2 must do. The plan that builds
-it is [TASKS.md](../TASKS.md); the design is [system-design.md](system-design.md). When a requirement changes,
+it is [tasks.md](tasks.md); the design is [system-design.md](system-design.md). When a requirement changes,
 change it here first and date the change.
 
 ## 1. Goal

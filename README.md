@@ -85,4 +85,4 @@ and Whisper model.
 
 ## Roadmap
 
-See [TASKS.md](TASKS.md). Requirements: [docs/requirements.md](docs/requirements.md).
+See [docs/tasks.md](docs/tasks.md). Requirements: [docs/requirements.md](docs/requirements.md).

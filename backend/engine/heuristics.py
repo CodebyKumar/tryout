@@ -1,4 +1,6 @@
-"""Text heuristics for the interviewer's lines: no repeated questions, no repeated filler openers."""
+"""Text heuristics for the interviewer's lines: no repeated questions, no repeated filler openers, no verdicts."""
+
+import re
 
 from ..models import Session
 
@@ -63,3 +65,18 @@ def fresh_ack(ack: str, session: Session) -> str:
             rest = " ".join(words[n:]).lstrip(" ,.!-")
             return rest[:1].upper() + rest[1:] if len(rest.split()) >= 3 else ""
     return ack
+
+
+# The interviewer never tells the candidate whether an answer was right (docs/requirements.md O4). These are the
+# ways a model slips into a verdict; an acknowledgment that contains one is replaced with a neutral one.
+_VERDICT = re.compile(
+    r"\b(that'?s|that is|you'?re|you are|exactly|absolutely|totally) (correct|right|wrong|incorrect)\b"
+    r"|\b(correct|right|wrong|great|perfect|excellent) answer\b|\bthe (right|correct) answer is\b"
+    r"|\byou (should|could) (say|answer|mention)\b",
+    re.I,
+)
+NEUTRAL_ACK = "Thanks for explaining."
+
+
+def judges_answer(text: str) -> bool:
+    return bool(_VERDICT.search(text))

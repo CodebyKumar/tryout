@@ -1,5 +1,7 @@
 import time
 
+from conftest import wait_for
+
 from backend.integrations.llm import LLMError
 
 
@@ -15,7 +17,8 @@ def test_prep_failure_is_visible_and_retryable(client):  # B3
     cand = c.post(
         f"/api/roles/{role['role_id']}/candidates", json={"name": "Riya", "resume": "Acme Pay, settlement"}
     ).json()
-    assert cand["prep_status"] == "failed"
+    row = lambda: c.get(f"/api/roles/{role['role_id']}").json()["candidates"][0]  # noqa: E731
+    assert wait_for(row, lambda x: x["prep_status"] != "pending")["prep_status"] == "failed"
     assert c.post(f"/api/candidates/{cand['candidate_id']}/prepare").status_code == 503
 
     llm.handlers["candidate_prep"] = working

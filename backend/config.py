@@ -39,5 +39,16 @@ MODELS = {
     "aux": _chain("MODEL_AUX", "qwen/qwen3.8-27b,openai/gpt-oss-20b"),
 }
 
-PIPER_MODEL = os.getenv("PIPER_MODEL", "")
 STT_MODEL = os.getenv("STT_MODEL", "whisper-large-v3")
+# Interviewer voice (Deepgram Aura, free credit). Without a key the room uses the browser's own speech.
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
+DEEPGRAM_VOICE = os.getenv("DEEPGRAM_VOICE", "aura-2-thalia-en")
+
+# Accounts. The account that signs up with ADMIN_EMAIL is the admin and is active at once; others wait for approval.
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
+SESSION_DAYS = int(os.getenv("SESSION_DAYS", "14"))  # how long a login lasts
+LINK_DAYS = int(os.getenv("LINK_DAYS", "14"))  # how long a candidate link works when no window is set
+
+# Capacity. The free LLM tier, not the server, limits how many interviews can run well at once.
+MAX_LIVE_INTERVIEWS = int(os.getenv("MAX_LIVE_INTERVIEWS", "4"))
+IDLE_MINUTES = int(os.getenv("IDLE_MINUTES", "10"))  # an interview with no answer for this long is ended

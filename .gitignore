@@ -5,4 +5,5 @@ data/
 *.pyc
 .pytest_cache/
 .run/
+.claude/
 .hallmark/

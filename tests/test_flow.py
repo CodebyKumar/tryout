@@ -73,9 +73,9 @@ def test_recruiter_to_report_flow(client):
     assert c.post(f"/api/i/{token}/rating", json={"stars": 4, "comment": " Clear questions "}).status_code == 200
     assert c.get(f"/api/i/{token}").json()["rated"] is True
     assert c.get(f"/api/candidates/{cand['candidate_id']}").json()["experience"]["comment"] == "Clear questions"
-    c.post(f"/api/candidates/{cand['candidate_id']}/decision", json={"status": "advanced"})
+    c.post(f"/api/candidates/{cand['candidate_id']}/decision", json={"decision": "advanced"})
     ranked = c.get(f"/api/roles/{role['role_id']}").json()["candidates"]
-    assert ranked[0]["status"] == "advanced" and ranked[0]["score"] == 9
+    assert ranked[0]["decision"] == "advanced" and ranked[0]["status"] == "completed" and ranked[0]["score"] == 9
 
 
 def test_policy_and_parsing():

@@ -470,7 +470,7 @@ All in [integrations/llm.py](../backend/integrations/llm.py) (`GroqLLM.json`), t
 # Part B - v2 design
 
 What v2 adds and how it fits the code in Part A. Requirements: [requirements.md](requirements.md). Tasks:
-[TASKS.md](../TASKS.md) Phases 5 to 14. Sections move into Part A as each phase is built.
+[tasks.md](tasks.md) Phases 5 to 14. Sections move into Part A as each phase is built.
 
 ## B1. High-level design
 
