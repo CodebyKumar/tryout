@@ -21,6 +21,9 @@ $$("[data-demo]").forEach((b) => b.addEventListener("click", openDemo));
 const ex = $("#exchange");
 const play = () => { ex.classList.remove("play"); requestAnimationFrame(() => requestAnimationFrame(() => ex.classList.add("play"))); };
 $("#replay").addEventListener("click", play);
+// Before it plays, hold the panel empty (no highlight, no score), so the visitor never sees the evidence vanish and
+// redraw. Without JavaScript, or with reduced motion, the finished state stays as written.
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) ex.classList.add("armed");
 const seen = new IntersectionObserver(([entry]) => {
   if (entry.isIntersecting) { seen.disconnect(); play(); }
 }, { threshold: 0.9 });
