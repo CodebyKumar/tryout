@@ -1,7 +1,7 @@
 // A candidate's report: header and decision, stat strip, summary, then one tab per kind of evidence. Also the
 // side-by-side comparison of two to four candidates.
-import { $, $$, esc, fmt, openMenu, plural, status, when } from "../lib/ui.js";
-import { DECISION, DOWN, RATING, REC, app, canWrite, crumbs, get, refreshLater, send, stale } from "./store.js";
+import { $, $$, dropdown, esc, fmt, plural, status, tip, when } from "../lib/ui.js";
+import { DECISION, RATING, REC, app, canWrite, crumbs, get, refreshLater, send, stale } from "./store.js";
 
 const MATCH = { strong: ["Clear evidence", "above"], partial: ["Some evidence", "warn"], none: ["Not in resume", "below"] };
 const LEVEL = { none: ["No activity noted", ""], some: ["Some activity", "warn"], review: ["Worth a look", "below"] };
@@ -135,9 +135,13 @@ export async function reportPage(id, tab, nav) {
   ];
   if (!tabs.some(([k]) => k === tab)) tab = "evidence";
   const list = (title, items) => `<div><h3>${title}</h3><ul class="side-list">${items.map((s) => `<li>${esc(s)}</li>`).join("") || "<li class='muted'>None noted</li>"}</ul></div>`;
-  const decide = canWrite() ? `<div class="more"><button type="button" class="btn ${decision ? "" : "primary"}" data-menu aria-haspopup="menu" aria-expanded="false">${decision ? DECISION[decision] : "Make a decision"}${DOWN}</button>
-      <div class="menu" role="menu" hidden>${[["advanced", "Advance"], ["hold", "Hold"], ["rejected", "Reject"]].map(([k, l]) => `<button type="button" class="btn quiet ${k === "rejected" ? "danger" : ""}" role="menuitemradio" aria-checked="${decision === k}" data-dec="${k}">${l}${decision === k ? " (current)" : ""}</button>`).join("")}
-      ${decision ? `<button type="button" class="btn quiet" role="menuitem" data-dec="">Clear decision</button>` : ""}</div></div>`
+  const decide = canWrite()
+    ? `<div id="decide">${dropdown({ label: decision ? DECISION[decision] : "Make a decision", cls: `btn ${decision ? "" : "primary"}`, select: true, items: [
+        { value: "advanced", label: "Advance", hint: "Move to the next round", checked: decision === "advanced" },
+        { value: "hold", label: "Hold", hint: "Keep for later", checked: decision === "hold" },
+        { value: "rejected", label: "Reject", hint: "Not moving forward", checked: decision === "rejected", danger: true },
+        ...(decision ? [{ divider: true }, { value: "", label: "Clear decision" }] : []),
+      ] })}</div>`
     : decision ? `<span class="pill ${decision}">${DECISION[decision]}</span>` : "";
 
   app.innerHTML = `<div class="page-head"><h1>${esc(c.name)}</h1>
@@ -146,10 +150,10 @@ export async function reportPage(id, tab, nav) {
 
     <dl class="stats">
       <div><dt>Score</dt><dd>${r.overall_score != null ? `<span class="fig">${r.overall_score}</span><span class="unit"> / 10</span>` : `<span class="muted">Not enough evidence</span>`}</dd></div>
-      <div><dt>AI suggests</dt><dd>${r.recommendation ? `<span class="pill ${r.recommendation}">${REC[r.recommendation]}</span>` : `<span class="pill">No suggestion</span>`}</dd></div>
+      <div><dt>AI suggests ${tip("Worked out in code from the verified ratings, not taken from the model. The decision is yours.")}</dt><dd>${r.recommendation ? `<span class="pill ${r.recommendation}">${REC[r.recommendation]}</span>` : `<span class="pill">No suggestion</span>`}</dd></div>
       <div><dt>Criteria met</dt><dd><span class="fig">${met}</span><span class="unit"> of ${r.criteria.length}</span></dd></div>
-      <div><dt>Resume fit</dt><dd>${d.fit?.score != null ? `<span class="fig">${d.fit.score}</span><span class="unit">%</span>` : `<span class="fig">-</span>`}</dd></div>
-      <div><dt>Integrity</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : "-"}</dd></div>
+      <div><dt>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</dt><dd>${d.fit?.score != null ? `<span class="fig">${d.fit.score}</span><span class="unit">%</span>` : `<span class="fig">-</span>`}</dd></div>
+      <div><dt>Integrity ${tip("Browser signals during the interview, such as leaving the tab. Context only, never scored. Details in the Integrity tab.")}</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : "-"}</dd></div>
     </dl>
 
     <section class="panel summary"><h2>Summary</h2>
@@ -200,11 +204,10 @@ export async function reportPage(id, tab, nav) {
     window.print();
     document.title = old;
   });
-  $$("[data-menu]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); openMenu(b); }));
-  $$("[data-dec]").forEach((b) => b.addEventListener("click", async () => {
-    await send(`/candidates/${id}/decision`, { method: "POST", body: { decision: b.dataset.dec || null } });
+  $("#decide")?.addEventListener("pick", async (e) => {
+    await send(`/candidates/${id}/decision`, { method: "POST", body: { decision: e.detail || null } });
     reportPage(id, tab, nav);
-  }));
+  });
   $$("[data-jump]").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
     select("transcript");

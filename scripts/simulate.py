@@ -139,7 +139,7 @@ if __name__ == "__main__":
     db.configure(config.DATABASE_URL, pooled=False)  # this script uses several event loops; pooled connections can't
     with TestClient(app) as client:
         # Writes need an active account; the demo account is switched back to read-only when done.
-        client.cookies.set(COOKIE, asyncio.run(_sign_in(email, "TryOut demo" if demo else "Simulator", "active")))
+        client.cookies.set(COOKIE, asyncio.run(_sign_in(email, "Demo recruiter" if demo else "Simulator", "active")))
         try:
             run(client, "strong" if demo else arg)
         finally:

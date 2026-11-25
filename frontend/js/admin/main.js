@@ -1,7 +1,8 @@
 // Admin: what the system is doing now (live interviews against capacity, background jobs, AI use) and the
 // accounts, with approve and disable. Only the admin can open it; for anyone else the API answers 404.
 import { api, me } from "../lib/api.js";
-import { $, $$, brand, confirmDialog, day, esc, plural } from "../lib/ui.js";
+import { topBar } from "../lib/shell.js";
+import { $, $$, confirmDialog, day, esc, plural, tip } from "../lib/ui.js";
 
 const STATUS = { pending: ["Waiting for approval", "review"], active: ["Active", "above"], disabled: ["Disabled", "below"], demo: ["Demo, read-only", ""] };
 const n = (x) => Number(x).toLocaleString();
@@ -10,9 +11,7 @@ const account = await me();
 if (!account) location.href = "/login?next=/admin";
 else if (!account.is_admin) location.href = "/app";
 else {
-  $("#brand").innerHTML = brand("/app");
-  $("#who").innerHTML = `<span class="name">${esc(account.name)}</span><span class="sub">${esc(account.email)}</span>`;
-  $("#signOut").addEventListener("click", async () => { await api("/auth/logout", { method: "POST" }).catch(() => {}); location.href = "/"; });
+  topBar(account);
   $("#refresh").addEventListener("click", load);
   load();
   setInterval(() => !document.hidden && load(), 15000);
@@ -31,8 +30,8 @@ async function load() {
 function drawOverview(o) {
   const j = o.jobs;
   $("#overview").innerHTML = `<dl class="stats">
-      <div><dt>Interviews running</dt><dd><span class="fig">${o.live_interviews}</span><span class="unit"> of ${o.max_live_interviews}</span></dd></div>
-      <div><dt>Jobs queued</dt><dd><span class="fig">${j.queued}</span></dd></div>
+      <div><dt>Interviews running ${tip("Interviews with an answer in the last two minutes, out of the most that can run at once on the free AI tier.")}</dt><dd><span class="fig">${o.live_interviews}</span><span class="unit"> of ${o.max_live_interviews}</span></dd></div>
+      <div><dt>Jobs queued ${tip("Background work: reading a resume, scoring an interview. Retried up to 3 times.")}</dt><dd><span class="fig">${j.queued}</span></dd></div>
       <div><dt>Jobs running</dt><dd><span class="fig">${j.running}</span></dd></div>
       <div><dt>Jobs failed</dt><dd><span class="fig">${j.failed.length}</span></dd></div>
       <div><dt>Interviewer voice</dt><dd><span class="pill ${o.voice ? "above" : "warn"}">${o.voice ? "On" : "Browser voice"}</span></dd></div>

@@ -188,16 +188,20 @@ Every endpoint calls one service function. Recruiter reads need a login (`Me`); 
 ### Frontend ([frontend/](../frontend/))
 
 No build step: ES modules loaded by each page. `js/lib/api.js` is the only place that calls the server (time
-limits, error messages, 401 to sign in, the per-tab `X-Client-Id`); `js/lib/ui.js` holds DOM helpers, dialogs,
-menus and the logo. Styles: `css/tokens.css` + `css/base.css` (Hallmark Cobalt palette, Familjen Grotesk heads, IBM
+limits, error messages, 401 to sign in, the per-tab `X-Client-Id`); `js/lib/ui.js` holds DOM helpers, dialogs, the
+logo, the `?` explanation (`tip`) and the one dropdown component (`dropdown` for action and account menus,
+`selectField` for selects; keyboard support, placed against the viewport so tables never clip it);
+`js/lib/shell.js` draws the top bar (logo, Roles, Admin, account menu with sign out). Every workspace page has one
+back link to its parent above the title. Demo and pending accounts get a guide strip that says what the page shows;
+new accounts get a Get started checklist ticked from their real progress. Styles: `css/tokens.css` + `css/base.css` (Hallmark Cobalt palette, Familjen Grotesk heads, IBM
 Plex Sans body), `css/app.css` (components and the workspace), `css/site.css` (home, sign in), `css/room.css`.
 
 | File | Screen |
 |------|--------|
 | `js/site/home.js`, `js/site/login.js` | Home (demo button) and sign in / sign up |
-| `js/app/main.js` | Workspace shell and hash router; account notice for pending and demo accounts |
+| `js/app/main.js` | Hash router and the guide strip for demo and pending accounts |
 | `js/app/store.js` | Shared state: account, navigation number, read cache (`get`), writes that clear it (`send`), background refresh |
-| `js/app/roles.js` | `#/` roles table, `#/new` create role from a document or template |
+| `js/app/roles.js` | `#/` Get started checklist and roles table, `#/new` create role from a document or template |
 | `js/app/role.js` | `#/role/{id}[/candidates/{filter} \| /plan \| /scoring \| /settings]`: candidates, add with a window, edit plan and scoring, integrity mode, delete |
 | `js/app/invite.js` | Invite and reminder (Gmail draft, mail app, copy, calendar file), edit or reschedule |
 | `js/app/report.js` | `#/report/{id}[/{tab}]` report with evidence, transcript, resume fit, integrity, How it decided, rating; `#/role/{id}/compare/{ids}` |

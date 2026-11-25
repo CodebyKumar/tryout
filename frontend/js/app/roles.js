@@ -1,26 +1,43 @@
 // Roles list (the workspace home) and Create role: one document in, a full interview plan out.
-import { $, day, esc, skeleton, status, ticking } from "../lib/ui.js";
+import { $, day, esc, selectField, skeleton, status, ticking, tip } from "../lib/ui.js";
 import { app, canWrite, crumbs, get, minutes, sendForm, stale, wireRows } from "./store.js";
 
 const LENGTHS = [5, 10, 15, 20, 30, 45];
+
+// The whole flow as a checklist, ticked from real data, so a new recruiter sees where they are and what's next.
+function gettingStarted(roles) {
+  const first = roles[0];
+  const sum = (k) => roles.reduce((a, r) => a + r[k], 0);
+  const steps = [
+    [roles.length > 0, "Create a role", "Paste a job description or pick a template. The AI drafts the interview plan and the scoring rubric; you can edit both.", `<a class="btn primary" href="#/new">Create role</a>`],
+    [sum("candidates") > 0, "Add a candidate", "Each candidate gets a private interview link. To see what candidates see, add yourself.", first ? `<a class="btn primary" href="#/role/${first.role_id}">Open ${esc(first.title)}</a>` : ""],
+    [sum("completed") > 0, "The candidate takes the interview", "Send the link with Invite, or open it yourself. The report is ready about a minute after the interview ends.", first ? `<a class="btn" href="#/role/${first.role_id}">See candidates</a>` : ""],
+    [sum("completed") > sum("to_review"), "Read the report and decide", "Every score shows the quotes it rests on. Advance, hold or reject; the AI only suggests.", ""],
+  ];
+  if (steps.every(([done]) => done)) return "";
+  const next = steps.findIndex(([done]) => !done);
+  return `<section class="panel start" aria-labelledby="startTitle"><div class="panel-title"><h2 id="startTitle">Get started</h2><span class="hint">${steps.filter(([d]) => d).length} of 4 done</span></div>
+    <ol class="start-steps">${steps.map(([done, title, text, action], i) => `<li class="${done ? "done" : i === next ? "next" : ""}">
+      <span class="start-mark" aria-hidden="true">${done ? "✓" : i + 1}</span>
+      <div><h3>${title}${done ? `<span class="visually-hidden"> (done)</span>` : ""}</h3>${i === next ? `<p>${text}</p>${action ? `<div class="row">${action}</div>` : ""}` : ""}</div></li>`).join("")}</ol></section>`;
+}
 
 export async function rolesPage(nav) {
   const roles = await get("/roles", () => !stale(nav) && rolesPage(nav));
   if (stale(nav)) return;
   crumbs([["Roles"]]);
   const create = canWrite() ? `<a class="btn primary" href="#/new">Create role</a>` : "";
-  const head = `<div class="page-head"><h1>Roles</h1><div class="actions">${create}</div></div>`;
+  const head = `<div class="page-head"><div><h1>Roles</h1><p class="sub">A role holds one interview plan and scoring rubric, and the candidates interviewed with it.</p></div><div class="actions">${roles.length ? create : ""}</div></div>`;
+  const start = canWrite() ? gettingStarted(roles) : "";
   if (!roles.length) {
-    app.innerHTML = `${head}<div class="empty"><h2>No roles yet</h2>
-      <p>A role holds the interview plan and scoring rubric. Create one from a job description or a template, then add candidates to it.</p>
-      ${create ? `<div class="row">${create}</div>` : ""}</div>`;
+    app.innerHTML = `${head}${start || `<div class="empty"><h2>No roles yet</h2><p>Roles you create appear here.</p></div>`}`;
     return;
   }
-  app.innerHTML = `${head}<div class="table-wrap"><table class="table"><thead><tr><th>Role</th><th class="num">Candidates</th><th class="num">Interviewed</th><th class="num">To review</th><th class="num">Length</th><th class="num">Brief</th><th class="end">Created</th></tr></thead><tbody>
+  app.innerHTML = `${head}${start}<div class="table-wrap"><table class="table"><thead><tr><th>Role</th><th class="num">Candidates</th><th class="num">Interviewed</th><th class="num">To review ${tip("Interviewed and scored, with no decision yet.")}</th><th class="num">Length</th><th class="end">Created</th></tr></thead><tbody>
     ${roles.map((r) => `<tr class="click" data-href="#/role/${r.role_id}"><td><a class="name" href="#/role/${r.role_id}">${esc(r.title)}</a>${r.company ? `<div class="sub">${esc(r.company)}</div>` : ""}${r.integrity === "strict" ? `<div class="sub">Strict integrity</div>` : ""}</td>
       <td class="num">${r.candidates}</td><td class="num">${r.completed}</td>
       <td class="num">${r.to_review ? `<span class="pill review">${r.to_review}</span>` : "0"}</td>
-      <td class="num">${minutes(r.time_budget_sec)} min</td><td class="num">v${r.version}</td><td class="end muted">${day(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+      <td class="num">${minutes(r.time_budget_sec)} min</td><td class="end muted">${day(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
   wireRows();
 }
 
@@ -37,7 +54,7 @@ export async function newRole(nav) {
         <div class="upload"><span>Or upload a file</span><button class="btn" type="button" id="pickFile">Choose PDF, Word or text</button><span id="fileName"></span><input type="file" id="file" accept=".pdf,.docx,.txt,.md" class="hidden"></div>
         <div class="fields">
           <label>Role title<input id="title" autocomplete="off" placeholder="Read from the document if empty"></label>
-          <label>Interview length<select id="len"><option value="0">As the document says (15 min if not stated)</option>${LENGTHS.map((m) => `<option value="${m * 60}">${m} minutes</option>`).join("")}</select></label>
+          ${selectField({ name: "len", label: "Interview length", value: 0, options: [[0, "As the document says", "15 minutes if it doesn't say"], ...LENGTHS.map((m) => [m * 60, `${m} minutes`])] })}
         </div>
         <div class="row end"><span id="st" class="status" role="status"></span><button id="build" type="button" class="btn primary">Build interview plan</button></div>
       </div>
@@ -61,7 +78,7 @@ export async function newRole(nav) {
     const fd = new FormData();
     if (file.files[0]) fd.append("file", file.files[0]); else fd.append("text", $("#text").value);
     fd.append("title", $("#title").value.trim());
-    fd.append("time_budget_sec", $("#len").value);
+    fd.append("time_budget_sec", $("[name=len]").value);
     e.target.disabled = true;
     const stop = ticking($("#st"), "Reading the document and designing the interview. Usually under 10 seconds.");
     try { const role = await sendForm("/roles/from-document", fd); stop(); location.hash = `#/role/${role.role_id}/plan`; }

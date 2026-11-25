@@ -33,21 +33,20 @@ export function refreshLater(fn, nav, ms = 5000) { clearInterval(poll); poll = s
 export const stopRefresh = () => clearInterval(poll);
 
 const BACK = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-export const DOWN = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-// Breadcrumbs, plus a Back button to the parent page on every page below Roles.
+// One back link above the page title, to the parent page, the same on every page. The top page (Roles) has none.
+// items: the path from Roles to this page, as [label, href].
 export function crumbs(items) {
-  const parent = items.at(-2);
-  $("#back").innerHTML = parent ? `<a class="btn icon back" href="${parent[1]}" aria-label="Back to ${esc(parent[0])}" title="Back to ${esc(parent[0])}">${BACK}</a>` : "";
-  $("#crumbs").innerHTML = items.map(([label, href], i) => i === items.length - 1
-    ? `<span aria-current="page">${esc(label)}</span>`
-    : `<a href="${href}">${esc(label)}</a><span class="sep" aria-hidden="true">/</span>`).join("");
+  const parent = items.at(-2), el = $("#crumbs");
+  el.hidden = !parent;
+  el.innerHTML = parent ? `<a class="back-link" href="${parent[1]}">${BACK}<span>${esc(parent[0])}</span></a>` : "";
+  document.title = `${items.at(-1)[0]} - TryOut`;
 }
 
 // Whole table rows open their link; clicks on buttons, links and menus inside the row keep their own meaning.
 export function wireRows(root = app) {
   root.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => {
-    if (!e.target.closest("button, a, input, .more")) location.hash = tr.dataset.href;
+    if (!e.target.closest("button, a, input, .dd, .tip")) location.hash = tr.dataset.href;
   }));
 }
 

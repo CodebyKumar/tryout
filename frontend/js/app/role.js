@@ -1,5 +1,5 @@
 // One role: header and stats, then a tab each for candidates, the interview plan, scoring and settings.
-import { $, $$, confirmDialog, copy, dialog, esc, fmt, openMenu, plural, status, ticking } from "../lib/ui.js";
+import { $, $$, confirmDialog, copy, dialog, dropdown, esc, fmt, plural, selectField, status, ticking, tip } from "../lib/ui.js";
 import { editDialog, fromInput, inviteDialog, windowText } from "./invite.js";
 import { DECISION, REC, app, canWrite, crumbs, get, linkFor, minutes, refreshLater, send, stale, wireRows } from "./store.js";
 
@@ -17,7 +17,7 @@ const FILTERS = [
 export async function rolePage(id, tab, filter, nav) {
   const role = await get(`/roles/${id}`, () => !stale(nav) && rolePage(id, tab, filter, nav));
   if (stale(nav)) return;
-  crumbs([["Roles", "#/"], [role.title, `#/role/${id}`], [ROLE_TABS.find(([k]) => k === tab)[1]]]);
+  crumbs([["Roles", "#/"], [role.title, `#/role/${id}`]]);
   const tabHref = (k) => (k === "candidates" ? `#/role/${id}` : `#/role/${id}/${k}`);
   const count = (test) => role.candidates.filter(test).length;
   const writable = canWrite();
@@ -25,10 +25,10 @@ export async function rolePage(id, tab, filter, nav) {
       ${writable ? `<div class="actions"><button type="button" class="btn" id="aiBtn">Edit with AI</button><button type="button" class="btn primary" id="addBtn">Add candidates</button></div>` : ""}</div>
     <dl class="stats">
       <div><dt>Candidates</dt><dd><span class="fig">${role.candidates.length}</span></dd></div>
-      <div><dt>Interviewed</dt><dd><span class="fig">${count((c) => c.status === "completed")}</span></dd></div>
-      <div><dt>To review</dt><dd><span class="fig">${count((c) => c.status === "completed" && !c.decision)}</span></dd></div>
+      <div><dt>Interviewed ${tip("Interviews finished and scored.")}</dt><dd><span class="fig">${count((c) => c.status === "completed")}</span></dd></div>
+      <div><dt>To review ${tip("Scored, with no decision from you yet.")}</dt><dd><span class="fig">${count((c) => c.status === "completed" && !c.decision)}</span></dd></div>
       <div><dt>Interview length</dt><dd><span class="fig">${minutes(role.time_budget_sec)}</span><span class="unit"> min</span></dd></div>
-      <div><dt>Integrity</dt><dd><span class="pill ${role.integrity === "strict" ? "warn" : ""}">${role.integrity === "strict" ? "Strict" : "Standard"}</span></dd></div>
+      <div><dt>Integrity ${tip("Standard notes browser signals on the report. Strict also requires full screen, blocks copy and paste, and refuses to start with a detectable extension. Change it in Settings.")}</dt><dd><span class="pill ${role.integrity === "strict" ? "warn" : ""}">${role.integrity === "strict" ? "Strict" : "Standard"}</span></dd></div>
     </dl>
     <nav class="tabs" aria-label="Role">${ROLE_TABS.map(([k, label]) => `<a href="${tabHref(k)}" class="${tab === k ? "on" : ""}" ${tab === k ? 'aria-current="page"' : ""}>${label}${k === "candidates" ? `<span class="count">${role.candidates.length}</span>` : ""}</a>`).join("")}</nav>
     <div id="body"></div>`;
@@ -75,7 +75,7 @@ function candidatesTab(role, filter, nav) {
   const list = role.candidates.filter(test);
   const canOpen = (c) => c.fit != null || c.score != null || c.status !== "invited";
   body.innerHTML = `<div class="toolbar"><nav class="filters" aria-label="Filter candidates">${FILTERS.map(([k, label, t]) => `<a href="#/role/${role.role_id}/candidates/${k}" class="${k === filter ? "on" : ""}" ${k === filter ? 'aria-current="true"' : ""}>${label}<span class="count">${role.candidates.filter(t).length}</span></a>`).join("")}</nav></div>
-    ${list.length ? `<div class="table-wrap"><table class="table candidates"><thead><tr><th class="check"><span class="visually-hidden">Compare</span></th><th>Candidate</th><th>Status</th><th class="num">Score</th><th>AI suggests</th><th class="num">Resume fit</th><th class="end"><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+    ${list.length ? `<div class="table-wrap"><table class="table candidates"><thead><tr><th class="check"><span class="visually-hidden">Compare</span></th><th>Candidate</th><th>Status</th><th class="num">Score ${tip("Out of 10, from the criteria a quote backs up.")}</th><th>AI suggests ${tip("Worked out in code from the verified ratings. You decide.")}</th><th class="num">Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</th><th class="end"><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${list.map((c) => `<tr ${canOpen(c) ? `class="click" data-href="#/report/${c.candidate_id}"` : ""}>
         <td class="check">${scored(c) && c.score != null ? `<input type="checkbox" data-pick="${c.candidate_id}" aria-label="Compare ${esc(c.name)}">` : ""}</td>
         <td data-label="Candidate">${canOpen(c) ? `<a class="name" href="#/report/${c.candidate_id}">${esc(c.name)}</a>` : `<span class="name">${esc(c.name)}</span>`}${c.email ? `<div class="sub">${esc(c.email)}</div>` : ""}${c.status === "invited" ? `<div class="sub">${esc(windowText(c))}</div>` : ""}</td>
@@ -84,11 +84,13 @@ function candidatesTab(role, filter, nav) {
         <td data-label="AI suggests">${c.recommendation ? `<span class="pill ${c.recommendation}">${REC[c.recommendation]}</span>` : `<span class="muted">-</span>`}</td>
         <td class="num" data-label="Resume fit">${c.fit != null ? `${c.fit}%` : `<span class="muted">-</span>`}</td>
         <td class="end">${c.status === "invited" ? `<button type="button" class="btn quiet" data-copy="${esc(linkFor(c))}">Copy link</button>${writable ? `<button type="button" class="btn quiet" data-invite="${c.candidate_id}">Invite</button>` : ""}` : ""}
-          ${writable ? `<div class="more"><button type="button" class="btn quiet icon" data-menu aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${esc(c.name)}">&hellip;</button><div class="menu" role="menu" hidden>
-            ${canOpen(c) ? `<a class="btn quiet" role="menuitem" href="#/report/${c.candidate_id}">Open report</a>` : ""}
-            <button type="button" class="btn quiet" role="menuitem" data-edit="${c.candidate_id}">${c.status === "invited" ? "Edit or reschedule" : "Edit details"}</button>
-            ${c.status !== "invited" || c.expired ? `<button type="button" class="btn quiet" role="menuitem" data-reset="${c.candidate_id}">Reset with a new link</button>` : ""}
-            <button type="button" class="btn quiet danger" role="menuitem" data-delete="${c.candidate_id}" data-name="${esc(c.name)}">Delete candidate</button></div></div>` : ""}</td></tr>`).join("")}
+          ${writable ? dropdown({ label: "&hellip;", cls: "btn quiet icon", chevron: false, ariaLabel: `More actions for ${c.name}`, items: [
+            ...(canOpen(c) ? [{ label: "Open report", href: `#/report/${c.candidate_id}` }] : []),
+            { label: c.status === "invited" ? "Edit or reschedule" : "Edit details", value: `edit:${c.candidate_id}` },
+            ...(c.status !== "invited" || c.expired ? [{ label: "Reset with a new link", value: `reset:${c.candidate_id}` }] : []),
+            { divider: true },
+            { label: "Delete candidate", value: `delete:${c.candidate_id}`, danger: true },
+          ] }) : ""}</td></tr>`).join("")}
       </tbody></table></div>` : `<div class="empty"><h2>Nobody here</h2><p>No candidates match this filter.</p></div>`}
     <div class="pickbar hidden" id="pickbar" role="region" aria-label="Compare"><span id="pickCount"></span><a class="btn primary" id="compare" href="#">Compare</a></div>`;
 
@@ -106,29 +108,30 @@ function candidatesTab(role, filter, nav) {
   wireRows(body);
   $$("[data-copy]", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); copy(b.dataset.copy, b); }));
   $$("[data-invite]", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); inviteDialog(byId(b.dataset.invite), role); }));
-  $$("[data-edit]", body).forEach((b) => b.addEventListener("click", () => editDialog(byId(b.dataset.edit), reload)));
-  $$("[data-menu]", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); openMenu(b); }));
   $$("[data-prep]", body).forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
     b.disabled = true; b.textContent = "Reading...";
     try { await send(`/candidates/${b.dataset.prep}/prepare`, { method: "POST" }); reload(); }
     catch (err) { b.disabled = false; b.title = err.message; b.textContent = "Still failing, retry"; }
   }));
-  $$("[data-reset]", body).forEach((b) => b.addEventListener("click", async () => {
-    if (!await confirmDialog({ title: "Reset with a new link?", confirm: "Reset interview",
-      body: "The transcript, report, resume and decision are cleared, and the old link stops working. Send the candidate the new link." })) return;
-    await send(`/candidates/${b.dataset.reset}/reset`, { method: "POST" });
+  body.addEventListener("pick", async (e) => {
+    const [action, id] = e.detail.split(":"), c = byId(id);
+    if (action === "edit") return editDialog(c, reload);
+    if (action === "reset") {
+      if (!await confirmDialog({ title: "Reset with a new link?", confirm: "Reset interview",
+        body: "The transcript, report, resume and decision are cleared, and the old link stops working. Send the candidate the new link." })) return;
+      await send(`/candidates/${id}/reset`, { method: "POST" });
+    }
+    if (action === "delete") {
+      if (!await confirmDialog({ title: `Delete ${c.name}?`, confirm: "Delete candidate", danger: true,
+        body: "Their resume, transcript and report are permanently removed, and the interview link stops working." })) return;
+      await send(`/candidates/${id}`, { method: "DELETE" });
+    }
     reload();
-  }));
-  $$("[data-delete]", body).forEach((b) => b.addEventListener("click", async () => {
-    if (!await confirmDialog({ title: `Delete ${b.dataset.name}?`, confirm: "Delete candidate", danger: true,
-      body: "Their resume, transcript and report are permanently removed, and the interview link stops working." })) return;
-    await send(`/candidates/${b.dataset.delete}`, { method: "DELETE" });
-    reload();
-  }));
+  });
   if (role.candidates.some((c) => c.status === "in_progress" || c.state === "EVALUATING" || c.prep_status === "pending")) {
     // a refresh redraws the table, so skip it while the recruiter has a row selected or a menu open
-    refreshLater(async () => { if (!app.querySelector("[data-pick]:checked, [data-menu][aria-expanded=true], dialog[open]")) await rolePage(role.role_id, "candidates", filter, nav); }, nav);
+    refreshLater(async () => { if (!app.querySelector("[data-pick]:checked, .dd-btn[aria-expanded=true], dialog[open]") || document.querySelector("dialog[open]")) await rolePage(role.role_id, "candidates", filter, nav); }, nav);
   }
 }
 
@@ -319,7 +322,7 @@ function settingsTab(role, reload) {
   $("#body").innerHTML = `<div class="cols">
     <form class="panel form" id="settings"><div class="panel-title"><h2>Role details</h2></div>
       <div class="fields"><label>Role title<input name="title" required autocomplete="off" value="${esc(role.title)}" ${off}></label><label>Company<input name="company" autocomplete="organization" value="${esc(role.company)}" ${off}></label></div>
-      <label>Interview length<select name="len" ${off}>${opts.map((m) => `<option value="${m}" ${m === len ? "selected" : ""}>${m} minutes</option>`).join("")}</select></label>
+      ${selectField({ name: "len", label: "Interview length", value: len, disabled: !!off, options: opts.map((m) => [m, `${m} minutes`]) })}
       <label>Notes for the interviewer<textarea name="notes" rows="5" placeholder="Must-haves, red flags, topics to avoid." ${off}>${esc(role.notes)}</textarea></label>
       <fieldset class="choice"><legend>Integrity checks during the interview</legend>
         <label class="option"><input type="radio" name="integrity" value="standard" ${role.integrity === "standard" ? "checked" : ""} ${off}><span><b>Standard</b>Tab switches, leaving full screen, copy and paste, a second screen and browser extensions are noted on the report.</span></label>

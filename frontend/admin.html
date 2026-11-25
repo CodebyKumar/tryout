@@ -11,14 +11,15 @@
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body class="app">
-  <aside class="side" aria-label="Workspace">
-    <div id="brand"></div>
-    <nav class="side-nav" aria-label="Main"><a href="/app">Roles</a><a href="/admin" class="on">Admin</a></nav>
-    <div class="account"><div id="who" class="who"></div><button type="button" class="btn quiet" id="signOut">Sign out</button></div>
-  </aside>
-  <div class="main">
-    <header class="topbar"><nav class="crumbs" aria-label="Breadcrumb"><span aria-current="page">Admin</span></nav></header>
-    <main class="page">
+  <header class="appbar">
+    <div class="appbar-in">
+      <div id="brand"></div>
+      <nav class="appnav" aria-label="Main"><a href="/app#/">Roles</a><a href="/admin" id="adminLink" aria-current="page">Admin</a></nav>
+      <div id="account" class="appbar-account"></div>
+    </div>
+  </header>
+  <div class="page">
+    <main>
       <div class="page-head"><h1>Admin</h1><div class="actions"><button type="button" class="btn" id="refresh">Refresh</button></div></div>
       <section id="overview" aria-label="System"><div class="skeleton" aria-hidden="true"><i></i><i></i></div></section>
       <section class="panel"><div class="panel-title"><h2>Accounts</h2><span class="hint" id="pendingCount"></span></div><div id="accounts"><div class="skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div></section>
