@@ -117,14 +117,14 @@ def make_fake_llm():
                     {
                         "criterion_id": "ownership",
                         "rating": "above_bar",
-                        "score": 4.5,
+                        "score": 9,
                         "rationale": "Owned retries",
                         "evidence": [{"turn_id": "u6", "quote": "I wrote the idempotent retry logic myself"}],
                     },
                     {
                         "criterion_id": "impact",
                         "rating": "meets_bar",
-                        "score": 3,
+                        "score": 6,
                         "evidence": [{"turn_id": "u6", "quote": "we doubled revenue"}],
                     },
                 ],  # fabricated quote
@@ -133,7 +133,6 @@ def make_fake_llm():
                 "concerns": [],
                 "recommendation": "advance",
                 "recommendation_reason": "Strong ownership",
-                "candidate_feedback": "You explained your retry design clearly.",
             },
         }
     )

@@ -30,7 +30,7 @@ against the transcript. The AI suggests; a human always decides.
 | Interview Engine | code | every turn | State machine: time budgets, coverage, probe limits, section switching |
 | Evaluator | strong | once per interview | Per-criterion rating with quotes; code verifies quotes and computes the score |
 
-Diagrams (system, one interview turn, rate-limit handling): [docs/architecture.md](docs/architecture.md).
+Code map and diagrams: [docs/system-design.md](docs/system-design.md).
 
 The LLM proposes, the engine decides. Section changes, timing and scoring are deterministic, so every candidate for a
 role gets the same brief and rubric.
@@ -85,4 +85,4 @@ and Whisper model.
 
 ## Roadmap
 
-See [TASKS.md](TASKS.md). Product spec: [docs/README.md](docs/README.md).
+See [TASKS.md](TASKS.md). Requirements: [docs/requirements.md](docs/requirements.md).

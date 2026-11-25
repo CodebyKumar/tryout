@@ -91,7 +91,6 @@ class Candidate(BaseModel):
     status: CandidateStatus = "invited"
     session_id: str | None = None
     plan_id: str | None = None
-    feedback_released: bool = False
     created_at: datetime = Field(default_factory=now)
 
 
@@ -171,6 +170,16 @@ class Flag(BaseModel):
     text: str
 
 
+class IntegrityEvent(BaseModel):
+    """A browser signal from the candidate's room (HackerEarth Smart Browser / HackerRank Proctor Mode style).
+    Shown to the recruiter for context, never scored and never read by the evaluator."""
+
+    kind: Literal["tab_hidden", "window_blur", "fullscreen_exit", "paste", "copy", "multi_screen"]
+    at_sec: float = Field(ge=0, le=86400)  # seconds into the interview
+    seconds: float = Field(default=0, ge=0, le=86400)  # how long away, for the "away" kinds
+    detail: str = Field(default="", max_length=120)  # e.g. "42 characters"; never the pasted text itself
+
+
 # ---------- Report ----------
 
 
@@ -184,7 +193,7 @@ class CriterionResult(BaseModel):
     criterion_id: str
     name: str
     rating: Literal["above_bar", "meets_bar", "below_bar", "not_assessed"]
-    score: float | None = None  # 1-5
+    score: float | None = None  # 1-10
     rationale: str = ""
     evidence: list[Evidence] = []
     verified: bool = True  # False when the evaluator's quotes could not be found in the transcript
@@ -199,10 +208,15 @@ class Report(BaseModel):
     strengths: list[str] = []
     concerns: list[str] = []
     resume_flags: list[str] = []
-    candidate_feedback: str = ""
     model: str = ""  # which model and prompt produced this report, for audits
     prompt_version: str = ""
     created_at: datetime = Field(default_factory=now)
+
+
+class ExperienceRating(BaseModel):
+    stars: int = Field(ge=1, le=5)
+    comment: str = Field("", max_length=1000)
+    at: datetime = Field(default_factory=now)
 
 
 SessionState = Literal["READY", "INTERVIEWING", "WRAPUP", "EVALUATING", "EVAL_FAILED", "DONE"]
@@ -221,6 +235,8 @@ class Session(BaseModel):
     sections: dict[str, SectionState] = {}
     turns: list[Turn] = []
     flags: list[Flag] = []
+    integrity: list[IntegrityEvent] = []
+    experience: ExperienceRating | None = None  # the candidate's own rating of the interview, after it ends
     usage: list[Usage] = []
     report: Report | None = None
     eval_error: str = ""  # why the last evaluation failed (state EVAL_FAILED)

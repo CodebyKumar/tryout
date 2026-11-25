@@ -28,6 +28,7 @@ class RefineIn(BaseModel):
 
 class RoleUpdate(BaseModel):
     title: str | None = None
+    company: str | None = None
     notes: str | None = None
     time_budget_sec: int | None = None
     sections: list[Section] | None = None
@@ -53,6 +54,11 @@ async def read_document(file: UploadFile) -> tuple[str, bytes]:
         raise HTTPException(400, "Could not read that file. Upload a PDF, DOCX or text file, or paste the text.")
 
 
+@router.get("/templates")
+async def list_templates():
+    return roles.templates()
+
+
 @router.post("/roles")
 async def create_role(body: RoleIn):
     return (await roles.create(**body.model_dump())).model_dump()
@@ -65,7 +71,8 @@ async def list_roles():
 
 @router.get("/roles/{role_id}")
 async def get_role(role_id: str):
-    return views.role(await roles.get(role_id), await candidates.summaries(role_id=role_id))
+    role, cands = await asyncio.gather(roles.get(role_id), candidates.summaries(role_id=role_id))  # two connections
+    return views.role(role, cands)
 
 
 @router.post("/roles/from-document")
@@ -103,12 +110,6 @@ async def candidate_report(candidate_id: str):
 @router.post("/candidates/{candidate_id}/decision")
 async def decide(candidate_id: str, body: DecisionIn):
     await candidates.decide(candidate_id, body.status)
-    return views.summary(await candidates.summary(candidate_id))
-
-
-@router.post("/candidates/{candidate_id}/release_feedback")
-async def release_feedback(candidate_id: str):
-    await candidates.release_feedback(candidate_id)
     return views.summary(await candidates.summary(candidate_id))
 
 

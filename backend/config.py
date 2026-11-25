@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))  # old JSON store, read only by scripts/import_json.py
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 # Original uploaded files (Supabase Storage). Optional: without a key only the extracted text is kept.

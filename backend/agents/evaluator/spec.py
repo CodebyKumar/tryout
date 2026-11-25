@@ -17,7 +17,7 @@ class EvidenceOut(BaseModel):
 class CriterionOut(BaseModel):
     criterion_id: Text = ""
     rating: Text = "not_assessed"  # above_bar, meets_bar, below_bar or not_assessed
-    score: float | None = None  # 1-5, clamped into the rating's band by the tools
+    score: float | None = None  # 1-10, clamped into the rating's band by the tools
     rationale: Text = ""
     evidence: list[EvidenceOut] = []
 
@@ -30,14 +30,13 @@ class EvalOut(BaseModel):
     resume_flags: Strs = []
     recommendation: Text = ""  # the model's suggestion; the tools derive the real one from verified scores
     recommendation_reason: Text = ""
-    candidate_feedback: Text = ""
 
 
 SPEC = AgentSpec(
     name="evaluator",
     tier="strong",
     output=EvalOut,
-    prompt_version="2",
+    prompt_version="4",
     max_tokens=6000,
     temperature=0.2,
     timeout_sec=90,

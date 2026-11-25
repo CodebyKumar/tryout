@@ -2,6 +2,7 @@
 // Turn-taking: interviewer speaks (Piper audio) -> we listen with voice-activity detection -> the answer is
 // transcribed by Whisper on the server -> next question. Typing is always available.
 import { $, api, confirmDialog, esc, fmt, postForm } from "/static/common.js";
+import { enterFullscreen, startMonitor } from "/static/integrity.js";
 
 const token = location.pathname.split("/").pop();
 const st = { info: null, view: null, syncedAt: 0, phase: "idle", micOn: true, camOn: false, cc: true, resumeOk: false };
@@ -50,11 +51,12 @@ async function init() {
   const info = st.info;
   if (info.interview) {
     st.view = info.interview;
-    if (!live()) return finished(info.feedback);
+    if (!live()) return finished();
   }
   st.resumeOk = info.has_resume || !!info.interview;
   $("#pjTitle").textContent = info.interview ? "Rejoin your interview" : `Hi ${info.name.split(" ")[0]}, ready to join?`;
-  $("#pjSub").textContent = `${info.role_title}${info.company ? ` · ${info.company}` : ""} · about ${info.minutes} minutes with an AI interviewer`;
+  const item = (k, v) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
+  $("#pjMeta").innerHTML = item("Role", info.role_title) + (info.company ? item("Company", info.company) : "") + item("Length", `About ${info.minutes} min`);
   $("#resumeBox").classList.toggle("hidden", st.resumeOk);
   show("prejoin");
   await openDevices();
@@ -88,12 +90,11 @@ function level() {
 function updateJoin() { $("#joinBtn").disabled = !($("#consent").checked && st.resumeOk); }
 $("#consent").addEventListener("change", updateJoin);
 
-$("#resumeBtn").addEventListener("click", async (e) => {
+async function uploadResume(file) {
   const fd = new FormData();
-  if ($("#resumeFile").files[0]) fd.append("file", $("#resumeFile").files[0]);
-  else fd.append("text", $("#resumeText").value);
-  e.target.disabled = true;
-  const stop = resumeLoader(true);
+  fd.append("file", file);
+  $("#resumeLabel").textContent = file.name;
+  const stop = resumeLoader();
   try {
     await postForm(`/i/${token}/resume`, fd);
     stop();
@@ -101,8 +102,13 @@ $("#resumeBtn").addEventListener("click", async (e) => {
     $("#resumeBox").classList.add("done");
     $("#resumeStatus").textContent = "Resume read. Your interview is ready.";
     updateJoin();
-  } catch (err) { stop(); $("#resumeStatus").textContent = err.message; e.target.disabled = false; $("#resumeFile").value = ""; }
-});
+  } catch (err) {
+    stop();
+    $("#resumeStatus").textContent = `${err.message} Choose another file to try again.`;
+    $("#resumeLabel").textContent = "Choose a file or drop it here";
+    $("#resumeFile").value = "";
+  }
+}
 // Loader while the resume is read: the steps reflect what the server does (upload, read, prepare questions).
 function resumeLoader() {
   const steps = [[0, "Uploading your resume"], [1.5, "Reading your experience and projects"], [4, "Preparing questions about your work"], [9, "Almost ready"]];
@@ -125,10 +131,12 @@ function resumeLoader() {
   };
 }
 
-$("#resumeFile").addEventListener("change", () => {
-  const f = $("#resumeFile").files[0];
-  if (f) { $("#resumeLabel").textContent = f.name; $("#resumeBtn").click(); }
-});
+$("#resumeFile").addEventListener("change", () => { const f = $("#resumeFile").files[0]; if (f) uploadResume(f); });
+// Drag and drop onto the upload box, the same as choosing the file.
+const drop = $("#dropZone");
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) uploadResume(f); });
 
 $("#joinBtn").addEventListener("click", async (e) => {
   e.target.disabled = true;
@@ -137,7 +145,9 @@ $("#joinBtn").addEventListener("click", async (e) => {
     await audioCtx?.resume();
     releaseMic(); // let the phone settle on the loudspeaker while the interview loads
     if (!st.view) st.view = await api(`/i/${token}/start`, { method: "POST" });
+    await enterFullscreen(); // from the click, so the browser allows it; declining is fine
     enterCall();
+    startIntegrity();
   } catch (err) { $("#pjStatus").textContent = err.message; e.target.disabled = false; }
 });
 
@@ -156,7 +166,27 @@ function enterCall() {
   else listen();
 }
 
-function setView(v) { st.view = v; st.syncedAt = Date.now(); }
+// Browser signals for the recruiter's report (tab switches, leaving full screen, paste). Context only, never scored.
+let stopMonitor = null, noticeTimer = null;
+function startIntegrity() {
+  stopMonitor?.();
+  stopMonitor = startMonitor({
+    clock: () => st.view.elapsed_sec + (Date.now() - st.syncedAt) / 1000,
+    send: (events, keepalive) => fetch(`/api/i/${token}/events`, { method: "POST", keepalive, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events }) }),
+    notify: (msg) => { $("#notice").textContent = msg; $("#notice").classList.remove("hidden"); clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $("#notice").classList.add("hidden"), 6000); },
+  });
+}
+
+function setView(v) { st.view = v; st.syncedAt = Date.now(); drawParts(); }
+
+// Where the candidate is in the interview: one segment per part, never coverage or scores.
+function drawParts() {
+  const parts = st.view?.sections || [];
+  const now = parts.findIndex((p) => p.section_id === st.view.current_section_id);
+  if (!parts.length || now < 0) return ($("#parts").innerHTML = "");
+  $("#parts").innerHTML = `<span class="part-label">Part ${now + 1} of ${parts.length}: ${esc(parts[now].name)}</span>
+    <span class="part-bar" aria-hidden="true">${parts.map((p, i) => `<i class="${i < now || ["satisfied", "partial", "skipped"].includes(p.status) ? "done" : i === now ? "now" : ""}"></i>`).join("")}</span>`;
+}
 
 // Countdown the candidate can always see. Server time is authoritative; we extrapolate between turns.
 setInterval(() => {
@@ -190,13 +220,13 @@ function animateVoice(an) {
       let v;
       if (data) { an.getByteFrequencyData(data); v = data[3 + i * 4] / 255; }
       else v = 0.35 + 0.35 * Math.sin(t / 140 + i * 1.3) * Math.sin(t / 310 + i);
-      b.style.height = `${12 + Math.max(0, v) * 96}px`;
+      b.style.height = `${8 + Math.max(0, v) * 52}px`;
     });
     voiceRaf = requestAnimationFrame(step);
   };
   voiceRaf = requestAnimationFrame(step);
 }
-function stopVoice() { cancelAnimationFrame(voiceRaf); bars().forEach((b) => (b.style.height = "12px")); }
+function stopVoice() { cancelAnimationFrame(voiceRaf); bars().forEach((b) => (b.style.height = "8px")); }
 
 function speakTurn(turn) {
   stopRecording(false);
@@ -370,12 +400,23 @@ $("#endBtn").addEventListener("click", async () => {
   finished();
 });
 
-async function finished(feedback) {
+function finished() {
   stopRecording(false);
   stream?.getTracks().forEach((t) => t.stop());
   show("finished");
-  if (feedback === undefined) { try { feedback = (await api(`/i/${token}`)).feedback; } catch {} }
-  if (feedback) { $("#feedback").classList.remove("hidden"); $("#feedbackText").textContent = feedback; }
+  $(st.info?.rated ? "#rated" : "#rateForm").classList.remove("hidden");
 }
+
+// The candidate's own rating of the interview, shown to the hiring team. Optional.
+$("#rateForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const stars = +new FormData(e.target).get("stars");
+  if (!stars) return ($("#rateStatus").textContent = "Pick a rating from 1 to 5.");
+  $("#rateBtn").disabled = true;
+  try {
+    await api(`/i/${token}/rating`, { method: "POST", body: { stars, comment: $("#rateComment").value } });
+    $("#rateForm").classList.add("hidden"); $("#rated").classList.remove("hidden");
+  } catch (err) { $("#rateStatus").textContent = err.message; $("#rateBtn").disabled = false; }
+});
 
 init();

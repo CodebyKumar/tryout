@@ -9,7 +9,8 @@ from ..agents.base import run_agent
 from ..engine import context, state_machine
 from ..integrations import stt, tts
 from ..integrations.llm import LLMError
-from ..models import InterviewPlan, Session
+from ..models import ExperienceRating, IntegrityEvent, InterviewPlan, Session
+from ..safety import integrity
 from . import Invalid, NotFound, candidates, evaluation, locks, roles, sessions
 
 log = logging.getLogger("interviews")
@@ -134,3 +135,27 @@ async def end(token: str) -> tuple[Session, InterviewPlan]:
                 await sessions.save(s, session)
             evaluation.run_later(cand.candidate_id, session.session_id)
     return session, plan
+
+
+async def rate(token: str, rating: ExperienceRating) -> None:
+    """The candidate rates the interview once it is over. A second rating replaces the first."""
+    cand, _, _ = await _load(token)
+    async with locks[cand.candidate_id]:
+        _, session, _ = await _load(token)
+        if session is None or session.state in ("READY", "INTERVIEWING", "WRAPUP"):
+            raise Invalid("You can rate the interview once it has ended")
+        session.experience = rating
+        async with db.transaction() as s:
+            await sessions.save(s, session)
+
+
+async def record_integrity(token: str, events: list[IntegrityEvent]) -> None:
+    """Browser signals from the room, kept with the session. Dropped once the interview is over."""
+    cand, _, _ = await _load(token)
+    async with locks[cand.candidate_id]:
+        _, session, _ = await _load(token)
+        if session.state not in ("INTERVIEWING", "WRAPUP"):
+            return
+        session.integrity += events[: integrity.MAX_EVENTS - len(session.integrity)]
+        async with db.transaction() as s:
+            await sessions.save(s, session)

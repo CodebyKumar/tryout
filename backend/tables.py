@@ -100,6 +100,7 @@ class Candidate(Base):
     email: Mapped[str] = mapped_column(Text, default="")
     token: Mapped[str] = mapped_column(String(64), unique=True)  # indexed lookup for every candidate request
     status: Mapped[str] = mapped_column(String(12), default="invited")
+    # shortcut: unused since candidate feedback became the candidate's own rating (2026-11-24); drop in the next migration
     feedback_released: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = _created()
 

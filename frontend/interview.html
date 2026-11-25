@@ -3,47 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tryout interview</title>
+  <title>TryOut</title>
+  <meta name="description" content="Join your interview with an AI interviewer: check your microphone, share your resume and start when you’re ready.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/call.css">
 </head>
 <body class="room">
-  <!-- Pre-join -->
-  <section id="prejoin" class="prejoin hidden">
-    <div class="preview">
-      <video id="preview" autoplay muted playsinline></video>
-      <div class="preview-off" id="previewOff">Camera is off</div>
-      <button id="pjCam" class="btn cam-toggle" type="button">Turn camera on</button>
-      <div class="meter-pill" aria-label="Microphone level"><span>Mic</span><div class="lvl"><div id="meterBar"></div></div></div>
-    </div>
-    <div class="join-panel">
-      <h1 id="pjTitle">Ready to join?</h1>
-      <p id="pjSub" class="sub"></p>
-      <div id="resumeBox" class="resume hidden">
-        <h3>Your resume</h3>
-        <p class="small dim">The interviewer reads it first, so the questions are about your own work.</p>
-        <label class="file-btn"><input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md"><span id="resumeLabel">Choose a PDF or DOCX</span></label>
-        <details><summary class="small dim">Paste it as text instead</summary><textarea id="resumeText" rows="5"></textarea>
-          <button id="resumeBtn" class="btn" style="margin-top:8px">Use this text</button></details>
-        <div id="resumeProgress" class="progress hidden" role="status" aria-live="polite">
-          <span class="spinner" aria-hidden="true"></span>
-          <div><b id="resumeStep">Uploading your resume</b><span id="resumeTime" class="small dim"></span>
-            <div class="bar"><i id="resumeBar"></i></div></div>
+  <!-- Lobby: device check, resume, consent -->
+  <section id="prejoin" class="lobby hidden">
+    <header class="lobby-top"><span class="brand">TryOut</span></header>
+    <div class="prejoin">
+      <div class="lobby-media">
+        <div class="preview">
+          <video id="preview" autoplay muted playsinline></video>
+          <div class="preview-off" id="previewOff">Camera is off</div>
         </div>
-        <p id="resumeStatus" class="small dim" role="status"></p>
+        <div class="devices">
+          <div class="meter-pill" aria-label="Microphone level"><span>Microphone</span><div class="lvl"><div id="meterBar"></div></div></div>
+          <button id="pjCam" class="btn" type="button">Turn camera on</button>
+        </div>
       </div>
-      <label class="consent"><input type="checkbox" id="consent"><span>I agree to an interview led by an AI interviewer. My answers are transcribed and shared with the hiring team. My video stays on this device and is not recorded.</span></label>
-      <button id="joinBtn" class="btn join" disabled>Join interview</button>
-      <p id="pjStatus" class="small dim" role="status"></p>
+      <div class="join-panel">
+        <h1 id="pjTitle">Ready to join?</h1>
+        <dl class="meta" id="pjMeta"></dl>
+        <div id="resumeBox" class="step resume hidden">
+          <h2>Your resume</h2>
+          <label class="file-btn" id="dropZone"><input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md"><span id="resumeLabel">Choose a file or drop it here</span><span class="hint">PDF or Word document</span></label>
+          <div id="resumeProgress" class="progress hidden" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <div><b id="resumeStep">Uploading your resume</b><span id="resumeTime" class="hint"></span>
+              <div class="bar"><i id="resumeBar"></i></div></div>
+          </div>
+          <p id="resumeStatus" class="hint" role="status"></p>
+        </div>
+        <label class="step consent"><input type="checkbox" id="consent"><span>I agree to an interview led by an AI interviewer. My answers are transcribed and shared with the hiring team. My video stays on this device and is not recorded. Leaving the tab or full screen, and copying or pasting, are noted for the hiring team.</span></label>
+        <button id="joinBtn" class="btn primary join" type="button" disabled>Join interview</button>
+        <p id="pjStatus" class="hint" role="status"></p>
+      </div>
     </div>
   </section>
 
   <!-- In call -->
   <section id="call" class="call hidden">
-    <header class="call-bar"><span id="callTitle"></span><span id="timer" class="clock" role="timer" aria-live="off"></span></header>
+    <header class="call-bar">
+      <div class="call-title"><span class="brand">TryOut</span><span id="callTitle"></span></div>
+      <div class="parts" id="parts" aria-live="polite"></div>
+      <span id="timer" class="clock" role="timer" aria-live="off"></span>
+    </header>
+    <main class="call-main">
     <div class="stage">
       <div class="tile ai" id="aiTile">
         <div class="voice" id="voice" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -58,24 +68,34 @@
       </div>
     </div>
     <div class="captions" id="captions" aria-live="polite"></div>
-    <div class="typebox hidden" id="typebox"><input id="typeInput" placeholder="Type your answer and press Enter"></div>
+    <div class="typebox hidden" id="typebox"><input id="typeInput" aria-label="Your answer" placeholder="Type your answer and press Enter"></div>
+    </main>
     <nav class="controls" aria-label="Call controls">
-      <button id="micBtn" class="ctl">Mute</button>
-      <button id="camBtn" class="ctl">Camera</button>
-      <button id="ccBtn" class="ctl on">CC</button>
-      <button id="typeBtn" class="ctl">Type</button>
-      <button id="doneBtn" class="ctl send" disabled>Done</button>
-      <button id="endBtn" class="ctl leave">Leave</button>
+      <button id="micBtn" class="ctl" type="button">Mute</button>
+      <button id="camBtn" class="ctl" type="button">Camera</button>
+      <button id="ccBtn" class="ctl on" type="button">Captions</button>
+      <button id="typeBtn" class="ctl" type="button">Type</button>
+      <button id="doneBtn" class="ctl send" type="button" disabled>Done</button>
+      <button id="endBtn" class="ctl leave" type="button">Leave</button>
     </nav>
   </section>
 
+  <div class="notice hidden" id="notice" role="status"></div>
+
   <section id="finished" class="endcard hidden">
+    <span class="brand">TryOut</span>
     <h1>Thanks for your time</h1>
-    <p class="sub">Your interview is complete and has been shared with the hiring team. They'll be in touch about next steps.</p>
-    <div id="feedback" class="feedback hidden"><h3>Feedback from your interview</h3><p id="feedbackText"></p></div>
+    <p class="sub">Your interview is complete and has been shared with the hiring team. They’ll be in touch about next steps.</p>
+    <form id="rateForm" class="feedback hidden">
+      <fieldset class="rate"><legend>How was your interview?</legend>
+        <div class="rate-options"><label class="rate-opt"><input type="radio" name="stars" value="1" required><span class="fig">1</span><span class="hint">Poor</span></label><label class="rate-opt"><input type="radio" name="stars" value="2" required><span class="fig">2</span><span class="hint">Fair</span></label><label class="rate-opt"><input type="radio" name="stars" value="3" required><span class="fig">3</span><span class="hint">Good</span></label><label class="rate-opt"><input type="radio" name="stars" value="4" required><span class="fig">4</span><span class="hint">Very good</span></label><label class="rate-opt"><input type="radio" name="stars" value="5" required><span class="fig">5</span><span class="hint">Excellent</span></label></div></fieldset>
+      <label>Anything you’d like to tell us? <span class="hint">Optional</span><textarea id="rateComment" rows="3" maxlength="1000"></textarea></label>
+      <div class="row"><button type="submit" class="btn primary" id="rateBtn">Send rating</button><span id="rateStatus" class="hint" role="status"></span></div>
+    </form>
+    <p id="rated" class="feedback hidden">Thanks for rating your interview.</p>
   </section>
 
-  <section id="invalid" class="endcard hidden"><h1>This link isn't valid</h1><p class="sub" id="invalidMsg"></p></section>
+  <section id="invalid" class="endcard hidden"><span class="brand">TryOut</span><h1>This link isn’t valid</h1><p class="sub" id="invalidMsg"></p></section>
   <script type="module" src="/static/interview.js"></script>
 </body>
 </html>

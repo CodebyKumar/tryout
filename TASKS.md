@@ -2,6 +2,7 @@
 
 Overview: [README.md](README.md). Code map: [docs/system-design.md](docs/system-design.md).
 Why each task exists: [docs/backend-audit.md](docs/backend-audit.md) (IDs like `B1`, `D3`, `F5` point there).
+What v2 must do: [docs/requirements.md](docs/requirements.md) (IDs like `R5`, `O4` point there).
 Run: `./run.sh start | stop | restart | status | logs | dev | test | sim [persona]`.
 
 ## Decisions
@@ -109,7 +110,7 @@ HTTP handlers become thin; orchestration lives in one place. See audit 5.1 and s
   Imports at the top and one job per function: done. `Target` -> `Section` moves to Phase 4: the name is also
   a JSON field (`target_id`) in saved data, two prompts and the frontend, so it changes once, with the new schema.
   Model limits (tokens, timeouts) stay in each agent's `spec.py`, next to the prompt they belong to.
-- [ ] 3.8 (moved to Phase 7) Run `/ponytail-audit` on the backend; cut what it finds unless the audit gives a reason to keep it.
+- [ ] 3.8 (moved to 5.4) Run `/ponytail-audit` on the backend; cut what it finds unless the audit gives a reason to keep it.
 - [ ] Manual check: full recruiter -> candidate -> report flow in the browser, nothing changed for the user.
 
 ## Phase 4 - Cloud database
@@ -135,46 +136,140 @@ public REST API is blocked. `alembic upgrade head` applies migrations; `TEST_DAT
 - [x] 4.10 `[UI]` Warn when editing a role that has invited candidates; show which brief version a candidate got.
 - [ ] Manual check: two candidates on brief v1, refine role, third candidate on v2; reports score against their own version.
 
-## Phase 5 - Jobs and lifecycle
+---
 
-- [ ] 5.1 `jobs` table runner: evaluation and prep retries run as jobs with attempts and errors (`A3`).
-- [ ] 5.2 On startup, re-queue `queued` / `running` jobs.
-- [ ] 5.3 Idle sweeper: interviews with no turn for 10 min are ended and evaluated.
-- [ ] 5.4 `A4` Reset / delete during evaluation cannot resurrect or orphan data.
-- [ ] 5.5 `C1`, `B10`, `D6` `decision` separate from interview status; decision and feedback only after a report.
-- [ ] 5.6 `D10` `decisions` audit log.
-- [ ] 5.7 `[UI]` Decision buttons disabled until a report exists; show decision history.
-- [ ] Manual check: restart the server mid-evaluation and mid-interview; both finish with a report.
+# v2 - deployed product (planned 2026-11-25)
 
-## Phase 6 - Auth and privacy
+Requirements: [docs/requirements.md](docs/requirements.md). Design (HLD and LLD):
+[docs/system-design.md Part B](docs/system-design.md#part-b---v2-design). Decisions taken 2026-11-25:
 
-- [ ] 6.1 `A1` Recruiter accounts, login, session cookie; all recruiter routes return 401 without it.
-- [ ] 6.2 Candidate tokens stored hashed, with expiry and revoke; reset issues a new link.
-- [ ] 6.3 Roles and candidates scoped to the recruiter who owns them.
-- [ ] 6.4 `C11` Candidate view shows progress only, no coverage.
-- [ ] 6.5 Data retention setting: purge resumes and transcripts after N days.
-- [ ] 6.6 `[UI]` Login page and logout.
-- [ ] Manual check: `./run.sh share`, open the public link logged out, confirm nothing recruiter-side is reachable.
+- Sign-up is open, and an admin approves an account before it can run interviews. A shared demo account is read-only.
+- Frontend stays vanilla ES modules with no build step: one file per screen, a small router, a small store.
+- Hosting: Hugging Face Spaces (free Docker, 16 GB RAM). Database and files stay on Supabase free tier.
+- Invites: one click opens a filled-in Gmail draft (or `mailto:`, or copy the text), plus a calendar file. No mail
+  server.
+- Voice out: Deepgram Aura-2 (free $200 credit, no card), with browser speech as fallback; Piper is removed to keep
+  the server light.
+- One server process (uvicorn, one worker). Anything that must stay correct with more than one process (jobs, turn
+  writes) is guarded in the database, not in memory.
 
-## Phase 7 - Backend sign-off
+Each phase ends with `./run.sh test` green, and with the manual check where one is listed.
 
-- [ ] 7.1 Every P0 and P1 finding in the audit closed or explicitly deferred.
-- [ ] 7.2 Tests cover each agent's tools, the engine rules, and each service flow.
-- [ ] 7.3 Sim personas (strong, vague, bluffer, injector) all produce sensible reports.
-- [ ] 7.4 Docs updated: README architecture table, system design, audit marked with what was fixed.
+## Phase 5 - Cleanup (started 2026-11-25)
 
-## Phase 8 - Frontend (after backend sign-off)
+- [x] 5.1 Remove leftovers: `scripts/import_json.py`, `config.DATA_DIR`, `docs/architecture.md` and the v1 spec
+  `docs/README.md` (replaced by system-design.md and requirements.md).
+- [x] 5.2 Fold `docs/product-roadmap.md` into this file (Phases 9 to 12 and Later), then delete it.
+- [ ] 5.3 Land the work in progress (integrity signals, role templates, scores out of 10, cobalt UI) as one reviewed
+  change before v2 starts, so v2 starts from a clean tree.
+- [ ] 5.4 `/ponytail-audit` on backend and frontend; delete what it finds unless there is a reason to keep it.
 
-- [ ] 8.1 Review the recruiter app and interview room against the new API.
-- [ ] 8.2 Recruiter: role versions and diffs, candidate list states (prep, interviewing, evaluating, failed, decided).
-- [ ] 8.3 Report: evidence timeline with flags, evaluation history.
-- [ ] 8.4 Candidate room: clearer errors and retry for voice and network failures.
+## Phase 6 - Jobs, lifecycle, concurrency (`R5`)
+
+- [ ] 6.1 `services/jobs.py`: prep and evaluation run as rows in `jobs` (attempts, error, backoff). One worker loop
+  claims a job with `FOR UPDATE SKIP LOCKED`, so a job never runs twice (`A3`). Replaces `asyncio.create_task`.
+- [ ] 6.2 On startup, jobs left `running` by a crash go back to `queued`.
+- [ ] 6.3 Idle sweeper (same loop): an interview with no turn for 10 minutes is ended and queued for evaluation.
+- [ ] 6.4 Turn writes use a `version` column on `sessions` (update only if unchanged), so two tabs or a double
+  submit get 409 instead of a corrupt transcript. The in-memory lock map stays as a fast path and is bounded.
+- [ ] 6.5 Admission control: `MAX_LIVE_INTERVIEWS` (counted from the database). Over the limit, the candidate sees
+  "all interview slots are busy, try again in a few minutes"; nothing is started.
+- [ ] 6.6 `A4` Reset or delete during evaluation cannot bring data back or leave orphans.
+- [ ] 6.7 `C1`, `B10`, `D6` Hiring decision is separate from interview status; `decisions` audit log (`D10`).
+- [ ] Tests: job claimed once by two workers; restart requeues; idle sweep; 409 on stale write; admission limit.
+- [ ] Manual check: restart the server mid-interview and mid-evaluation; both finish with a report.
+
+## Phase 7 - Accounts and multi-user (`R2`, `R3`)
+
+- [ ] 7.1 Migration `0004`: `recruiters` gains `name`, `status` (pending / active / disabled), `is_admin`;
+  `auth_sessions` table (hashed token, expiry); `roles.recruiter_id` required; candidates get `token_hash`,
+  `opens_at`, `closes_at`; drop `feedback_released`. Existing data moves to the admin account.
+- [ ] 7.2 `services/accounts.py`: sign up, log in, log out. Passwords with `hashlib.scrypt` (standard library).
+  Session cookie: HttpOnly, Secure, SameSite=Lax, 14 days. Login attempts limited per email.
+- [ ] 7.3 `api/deps.py`: `current_recruiter` and `current_admin` dependencies; every recruiter and admin route uses
+  one. Pending accounts can sign in and see the demo, but cannot create roles or invite.
+- [ ] 7.4 Ownership: every service query on roles, candidates, sessions and reports filters by recruiter. One
+  helper loads an owned role or raises NotFound (404, never 403, so ids are not probed).
+- [ ] 7.5 Admin: list recruiters, approve, disable; usage per recruiter (LLM calls, interviews); live interviews.
+  First admin from `ADMIN_EMAIL` in `.env`.
+- [ ] 7.6 Candidate tokens stored hashed; reset issues a new link; link outside its window says when it opens.
+- [ ] 7.7 Demo account: seeded role from a template with one finished interview, read-only.
+- [ ] Tests: every recruiter route returns 401 logged out, and 404 for another recruiter's ids (one parametrised
+  test over the route list); pending account cannot invite; admin-only routes refuse recruiters.
+
+## Phase 8 - Scheduling, candidates, reports (`R4`)
+
+- [ ] 8.1 Schedule: set an interview window when adding or editing a candidate; the room shows it.
+- [ ] 8.2 Invite and reminder: Gmail compose link, `mailto:` link and copy-text, all from one template; `.ics`
+  calendar file endpoint.
+- [ ] 8.3 Candidate list per role: one status column (invited, scheduled, in progress, evaluating, ready, decided,
+  failed) with inline retry; edit, delete, reset.
+- [ ] 8.4 Reports: per-candidate report, ranking per role, read-only share link with expiry.
+- [ ] Tests: window enforced in the candidate API; ics content; share link expires.
+
+## Phase 9 - Agent context and intent regulation (`R6`, `O3`, `O4`)
+
+- [ ] 9.1 Context budget: a test runs a 40-turn interview on the fake LLM and asserts the Turn Agent input stays
+  under a fixed token count (slots are the memory, not the transcript).
+- [ ] 9.2 Intent regulation in code: when the agent flags injection or off-topic, the engine keeps the section and
+  asks the bridge question; a reply that answers the question for the candidate is replaced. Sim `injector` passes.
+- [ ] 9.3 Latency: time from candidate audio received to reply audio ready, per turn, in `llm_calls`; p50 and p95
+  in the sim output and the admin page.
+- [ ] 9.4 Agent trace view (recruiter): per turn, slot updates, the gap chosen, what code overrode, tokens,
+  latency. This is the page that shows how the system works (`O6`).
+- [ ] 9.6 TTS: `integrations/tts.py` calls Deepgram Aura-2 when `DEEPGRAM_API_KEY` is set; otherwise the room uses
+  browser speech. Remove `piper-tts` and `PIPER_MODEL`. Test: fallback chosen without a key.
+- [ ] 9.5 Room reconnect: a dropped network resumes the same session; the candidate can interrupt playback.
+
+## Phase 10 - Strict integrity (`R7`, `O5`)
+
+- [ ] 10.1 Role setting `integrity`: standard (signals only) or strict.
+- [ ] 10.2 Strict: full screen required to start; leaving it pauses the interview behind an overlay until back;
+  copy, paste, right-click and text selection blocked in the room; one open tab per link (6.4).
+- [ ] 10.3 Extension check before start: known injected markers (for example Grammarly attributes, AI sidebar
+  elements), `chrome-extension://` resources, and unknown elements injected into the page. Strict mode blocks the
+  start and names what was found; the report lists it. The lobby says plainly what cannot be checked.
+- [ ] 10.4 Report: integrity timeline next to the transcript; never part of the score.
+- [ ] Tests: summary levels; strict start refused with a found extension; events capped.
+
+## Phase 11 - Brand, design system, home page (`R1`, `R10`, `R11`)
+
+- [ ] 11.1 Name TryOut; logo (SVG mark + wordmark), favicon, used in every page header, the room and the invite.
+- [ ] 11.2 Design system: `tokens.css` (colour, type, spacing, radius), `base.css`, `components.css` (button,
+  field, table, badge, card, toast, dialog, the loading / empty / error state). One accent.
+- [ ] 11.3 Home page: what TryOut does, how one interview flows, what the report shows, sign in and sign up, try
+  the demo. Every sentence describes a feature that exists. Screens are real screenshots.
+- [ ] 11.4 Login, sign up, pending approval pages.
+
+## Phase 12 - Frontend structure and screens (`R8`, `R10`)
+
+- [ ] 12.1 `frontend/js/lib/`: `api.js` (fetch, errors, 401 to login), `store.js`, `router.js`, `dom.js`, `ui.js`.
+- [ ] 12.2 Recruiter app, one module per screen: roles, role brief, candidates, report, compare, trace, settings.
+- [ ] 12.3 Admin app: recruiters, usage, live interviews.
+- [ ] 12.4 Room: lobby (mic check, consent, AI notice, extension check), interview, done. Split `interview.js`.
+- [ ] 12.5 Every data region has loading, empty and error states; state is in the URL.
+- [ ] 12.6 Mobile: every screen checked at 375 px and 768 px; the room works on a phone browser in standard mode
+  (strict mode needs a desktop and says so).
+
+## Phase 13 - Deploy (`R12`)
+
+- [ ] 13.1 `Dockerfile`: python 3.12 slim, ffmpeg, uv; port 7860;
+  `alembic upgrade head` before start.
+- [ ] 13.2 Production Supabase project (Mumbai region) separate from dev; secrets in the Space settings.
+- [ ] 13.3 GitHub Actions: lint and tests on every push.
+- [ ] 13.4 Hugging Face Space from the repo; health check; demo account seeded.
+- [ ] Manual check: sign up on the live URL, approve as admin, run an interview on desktop and phone, read the report.
+
+## Phase 14 - Sign-off
+
+- [ ] 14.1 Every requirement in docs/requirements.md met or deferred with a reason.
+- [ ] 14.2 Sim personas (strong, vague, bluffer, injector) give sensible reports on the live build.
+- [ ] 14.3 Docs: README (what, how it works, diagram, run, deploy), system design matches the code.
+- [ ] 14.4 Resume and portfolio text that lists only what was built.
 
 ## Later
 
-- [ ] `F10` Integrity signals: tab switches, paste, answer timing, shown on the report timeline (never scored).
-- [ ] Proctoring: face presence, second voice.
-- [ ] Email invites and reminders.
-- [ ] Bulk candidate import (CSV).
-- [ ] Evaluator calibration: run twice, flag disagreements.
-- [ ] ATS webhooks.
+- Fairness check in the sim (swap name and pronouns, scores must not move).
+- Evaluator calibration: run twice on borderline scores, flag disagreement.
+- Proctoring with camera: face presence, second voice.
+- Bulk candidate import (CSV).

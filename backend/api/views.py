@@ -2,6 +2,7 @@
 
 from ..engine import policy
 from ..models import Candidate, InterviewPlan, Role, Session
+from ..safety import integrity
 from ..services.candidates import Summary
 
 
@@ -55,6 +56,7 @@ def role_list(rows: list[tuple[Role, list[str]]]) -> list[dict]:
             **r.model_dump(include={"role_id", "title", "company", "created_at", "time_budget_sec", "version"}),
             "candidates": len(statuses),
             "completed": sum(1 for x in statuses if x not in ("invited", "in_progress")),
+            "to_review": statuses.count("completed"),  # scored, no decision yet
         }
         for r, statuses in rows
     ]
@@ -87,6 +89,8 @@ def report(c: Candidate, r: Role, s: Session | None, plan: InterviewPlan | None)
             eval_error=s.eval_error,
             usage=usage(s),
             flags=[f.model_dump() for f in s.flags],
+            integrity=integrity.summarize(s.integrity),
+            experience=s.experience.model_dump(mode="json") if s.experience else None,
             duration_sec=round(s.elapsed_sec),
             resume_highlights=plan.resume_highlights,
             transcript=[
@@ -111,6 +115,6 @@ def candidate_info(c: Candidate, r: Role, s: Session | None, plan: InterviewPlan
         "minutes": round(r.time_budget_sec / 60),
         "status": c.status,
         "interview": interview(s, plan) if s else None,
-        "feedback": s.report.candidate_feedback if s and s.report and c.feedback_released else None,
+        "rated": bool(s and s.experience),
         "has_resume": bool(c.resume.strip()),
     }

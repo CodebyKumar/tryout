@@ -1,6 +1,8 @@
 """Roles: build the brief with the Role Compiler, change it with Role Refine or by hand. Every change adds an
 immutable version (audit A2): candidates keep the brief their plan was built on."""
 
+from pathlib import Path
+
 from sqlalchemy import select
 
 from .. import config, db
@@ -116,10 +118,26 @@ async def refine(role_id: str, instruction: str) -> Role:
         return await save_version(s, role, "refine", instruction)
 
 
+_LABELS = {"title", "company"}  # stored on the role itself, not part of the brief a candidate is interviewed on
+
+
 async def update(role_id: str, changes: dict) -> Role:
-    """Manual edit. Same checks as AI-written briefs: unique ids, weights in range, sections fit the length."""
+    """Manual edit. Same checks as AI-written briefs: unique ids, weights in range, sections fit the length.
+    Only a change to the brief (sections, criteria, notes, length) makes a new version; a rename does not."""
     async with db.transaction() as s:
         role = await load(s, role_id)
+        changes = {k: v for k, v in changes.items() if getattr(role, k) != v}
+        if not changes.keys() - _LABELS:
+            row = await s.get(t.Role, role_id)
+            for k, v in changes.items():
+                setattr(row, k, v)
+                setattr(role, k, v)
+            return role
+        if "time_budget_sec" in changes and "sections" not in changes:
+            # A new length rescales every section by the same factor (apply_compiled then enforces the floor and cap).
+            ratio = changes["time_budget_sec"] / role.time_budget_sec
+            for sec in role.sections:
+                sec.time_budget_sec = round(sec.time_budget_sec * ratio)
         for k, v in changes.items():
             setattr(role, k, v)
         try:
@@ -150,3 +168,15 @@ async def list_all() -> list[tuple[Role, list[str]]]:
 async def get(role_id: str) -> Role:
     async with db.transaction() as s:
         return await load(s, role_id)
+
+
+_TEMPLATES = Path(__file__).resolve().parent.parent / "role_templates"
+
+
+def templates() -> list[dict]:
+    """Starter job descriptions: line 1 title, line 2 "Summary: ...", the rest is the text the Role Compiler reads."""
+    out = []
+    for f in sorted(_TEMPLATES.glob("*.md")):
+        title, summary, _, *body = f.read_text().splitlines()
+        out.append({"id": f.stem, "title": title, "summary": summary.removeprefix("Summary: "), "jd": "\n".join(body)})
+    return out

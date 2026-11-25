@@ -1,5 +1,7 @@
 """Candidates: invite, read the resume (Candidate Prep), decide, release feedback, reset, delete."""
 
+import asyncio
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import and_, delete, select, update
@@ -59,7 +61,6 @@ async def load(s, candidate_id: str | None = None, token: str | None = None) -> 
         status=row.status,
         plan_id=plan_id,
         session_id=session_id,
-        feedback_released=row.feedback_released,
         created_at=row.created_at,
     )
 
@@ -80,7 +81,7 @@ async def save(s, cand: Candidate) -> None:
         )
         await s.flush()  # no ORM relationships: insert the parent before rows that point at it
         return
-    row.name, row.email, row.status, row.feedback_released = cand.name, cand.email, cand.status, cand.feedback_released
+    row.name, row.email, row.status = cand.name, cand.email, cand.status
 
 
 async def load_plan(s, plan_id: str) -> InterviewPlan:
@@ -116,7 +117,6 @@ async def summaries(role_id: str | None = None, candidate_id: str | None = None)
             name=c.name,
             email=c.email,
             status=c.status,
-            feedback_released=c.feedback_released,
             created_at=c.created_at,
         )
         fit = (plan or {}).get("fit", {}).get("score")
@@ -168,12 +168,24 @@ async def _store_resume(s, cand: Candidate, text: str, filename: str | None = No
     )
 
 
+# Shape check only (something@domain.tld); delivery is never verified because links are shared by hand.
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
 async def add(role_id: str, name: str, email: str = "", resume: str = "") -> Candidate:
-    if not name.strip():
+    name, email = name.strip(), email.strip().lower()
+    if not name:
         raise Invalid("Candidate name is required")
+    if email and not _EMAIL.fullmatch(email):
+        raise Invalid(f"{email} is not a valid email address")
     cand = Candidate(role_id=role_id, name=name, email=email, resume=resume)
     async with db.transaction() as s:
         await roles.load(s, role_id)
+        taken = email and await s.scalar(
+            select(t.Candidate.id).where(t.Candidate.role_id == role_id, t.Candidate.email == email)
+        )
+        if taken:
+            raise Invalid(f"{email} is already a candidate for this role")
         await save(s, cand)
         if resume.strip():
             await _store_resume(s, cand, resume.strip())
@@ -220,13 +232,6 @@ async def decide(candidate_id: str, status: str) -> None:
         await save(s, cand)
 
 
-async def release_feedback(candidate_id: str) -> None:
-    async with db.transaction() as s:
-        cand = await load(s, candidate_id)
-        cand.feedback_released = True
-        await save(s, cand)
-
-
 async def delete_candidate(candidate_id: str) -> None:
     """Remove the candidate and everything about them: resumes, plans, transcripts, reports (foreign keys cascade)."""
     async with locks[candidate_id], db.transaction() as s:
@@ -240,7 +245,7 @@ async def reset(candidate_id: str) -> None:
         cand = await load(s, candidate_id)
         await s.execute(delete(t.Plan).where(t.Plan.candidate_id == candidate_id))  # cascades to sessions and turns
         await s.execute(delete(t.Document).where(t.Document.candidate_id == candidate_id))
-        cand.status, cand.feedback_released = "invited", False
+        cand.status = "invited"
         await save(s, cand)
 
 
@@ -248,7 +253,14 @@ async def report(candidate_id: str):
     """Everything the recruiter's report page shows: candidate, role, interview session and plan."""
     async with db.transaction() as s:
         cand = await load(s, candidate_id)
-        role = await roles.load(s, cand.role_id)
-        session = await sessions.load(s, cand.session_id) if cand.session_id else None
-        plan = await load_plan(s, cand.plan_id) if cand.plan_id else None
+
+    async def read(fn, key):  # each part on its own connection, so the database round trips overlap
+        if not key:
+            return None
+        async with db.transaction() as s:
+            return await fn(s, key)
+
+    role, session, plan = await asyncio.gather(
+        read(roles.load, cand.role_id), read(sessions.load, cand.session_id), read(load_plan, cand.plan_id)
+    )
     return cand, role, session, plan

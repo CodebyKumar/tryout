@@ -4,6 +4,7 @@ AI voice screening interviewer, being rebuilt from a prototype into a product.
 
 ## Start here
 
+- What v2 must do (owner's brief, 2026-11-25): [docs/requirements.md](docs/requirements.md). Check work against it.
 - Plan and current phase: [TASKS.md](TASKS.md). Work through it in phase order and tick items off as they land.
 - Why each task exists (finding IDs like `B1`, `D3`): [docs/backend-audit.md](docs/backend-audit.md).
 - Code map (layers, routes, flows, where to find things): [docs/system-design.md](docs/system-design.md).

@@ -8,9 +8,13 @@ from ...models import CriterionResult, Evidence, Report, Role, Session
 if TYPE_CHECKING:
     from .spec import EvalOut
 
-_SCORES = {"above_bar": 4.5, "meets_bar": 3.0, "below_bar": 1.5}
-# A score must sit inside its rating's band: "below_bar" with score 5 is not a valid answer.
-_BANDS = {"above_bar": (4.0, 5.0), "meets_bar": (2.5, 3.9), "below_bar": (1.0, 2.4)}
+# Scores are out of 10. A score must sit inside its rating's band: "below_bar" with score 9 is not a valid answer.
+_SCORES = {"above_bar": 9.0, "meets_bar": 6.0, "below_bar": 3.0}
+_BANDS = {"above_bar": (8.0, 10.0), "meets_bar": (5.0, 7.9), "below_bar": (1.0, 4.9)}
+REJECT_BELOW, ADVANCE_FROM = 5.0, 6.0
+MIN_COVERAGE = (
+    0.5  # quote-backed criteria must carry this share of the rubric's weight before there is an overall score
+)
 
 
 def _words(s: str) -> list[str]:
@@ -36,13 +40,15 @@ def _find_quote(session: Session, turn_id: str, quote: str):
 
 
 def recommend(results: list[CriterionResult], role: Role, overall: float | None) -> str | None:
-    """Suggestion from verified ratings only. Key criteria (weight 2+) must be verified to advance."""
-    if overall is None:
+    """Suggestion from verified ratings only. Key criteria (weight 2+) must be verified to advance. No suggestion
+    when nothing is backed by a quote; "hold" when some is, but too little for an overall score."""
+    backed = [r for r in results if r.verified and r.score is not None]
+    if not backed:
         return None
     key = [r for r, c in zip(results, role.criteria, strict=True) if c.weight >= 2]
-    if overall < 2.5 or any(r.verified and r.rating == "below_bar" for r in key):
+    if any(r.verified and r.rating == "below_bar" for r in key) or (overall is not None and overall < REJECT_BELOW):
         return "reject"
-    if overall >= 3.0 and all(r.verified and r.rating != "not_assessed" for r in key):
+    if overall is not None and overall >= ADVANCE_FROM and all(r.verified and r.rating != "not_assessed" for r in key):
         return "advance"
     return "hold"
 
@@ -74,18 +80,21 @@ def build_report(role: Role, session: Session, out: "EvalOut") -> Report:
             )
         )
 
-    # Weighted score over assessed, verified criteria only: an unbacked rating does not count.
+    # Weighted average over quote-backed criteria only (an unbacked rating does not count), and only once those carry
+    # enough of the rubric: one good answer on a minor criterion must not stand in for the whole interview.
     scored = [
         (r.score, c.weight) for r, c in zip(results, role.criteria, strict=True) if r.score is not None and r.verified
     ]
-    overall = round(sum(s * w for s, w in scored) / sum(w for _, w in scored), 1) if scored else None
+    coverage = sum(w for _, w in scored) / (sum(c.weight for c in role.criteria) or 1)
+    overall = round(sum(s * w for s, w in scored) / sum(w for _, w in scored), 1) if coverage >= MIN_COVERAGE else None
     rec = recommend(results, role, overall)
     suggested, reason = out.recommendation, out.recommendation_reason
+    basis = f"score {overall} of 10" if overall is not None else "evidence on less than half of the rubric"
     if rec is None:
-        reason = "Not enough verified evidence to assess any criterion. Consider resetting and re-inviting."
+        reason = "No answer could be backed by a quote, so nothing was scored. Consider resetting and re-inviting."
     elif rec != suggested:
         reason = (
-            f"Set from verified scores ({overall}); the evaluator suggested {suggested or 'nothing'}. {reason}".strip()
+            f"Set from verified evidence ({basis}); the evaluator suggested {suggested or 'nothing'}. {reason}".strip()
         )
 
     return Report(
@@ -97,5 +106,4 @@ def build_report(role: Role, session: Session, out: "EvalOut") -> Report:
         strengths=out.strengths[:4],
         concerns=out.concerns[:4],
         resume_flags=out.resume_flags[:4],
-        candidate_feedback=out.candidate_feedback,
     )

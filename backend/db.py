@@ -18,8 +18,9 @@ def configure(url: str, pooled: bool = True) -> None:
         raise RuntimeError("DATABASE_URL is not set. Add the Supabase Session pooler URL to .env")
     opts: dict = {}
     if make_url(url).get_backend_name() == "postgresql" and pooled:
-        # Free Supabase pooler allows few client connections: keep the pool small and recycle idle ones.
-        opts = {"pool_size": 3, "max_overflow": 2, "pool_pre_ping": True, "pool_recycle": 300}
+        # Free Supabase pooler allows few client connections: keep the pool small and recycle idle ones. No pre-ping:
+        # it costs a full round trip to the database on every request; recycling covers connections the pooler drops.
+        opts = {"pool_size": 3, "max_overflow": 2, "pool_recycle": 120}
         if make_url(url).port == 6543:  # transaction pooler: no prepared statements across connections
             opts["connect_args"] = {"statement_cache_size": 0}
     else:

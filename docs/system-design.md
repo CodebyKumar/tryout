@@ -4,7 +4,7 @@ A map of the backend: how the pieces fit, which file does what, and how every re
 Use it to find your way around. Links go to files; search the file for the named function.
 
 - Part A describes the code **as it is today** (after Phase 3: api / services / agents / engine / integrations).
-- Part B describes the **target design** and maps each current file to its future home.
+- Part B is the **v2 design** (HLD and LLD) for TASKS Phases 5 to 14; sections move into Part A as they are built.
 - Problems found and the plan to fix them: [backend-audit.md](backend-audit.md).
 
 ---
@@ -120,7 +120,6 @@ Every endpoint calls one service function.
 | `GET /api/candidates/{id}` | `candidates.report` | - | - |
 | `POST /api/candidates/{id}/prepare` | `candidates.prepare` (503 if it fails again) | Candidate Prep | Plan |
 | `POST /api/candidates/{id}/decision` | `candidates.decide` | - | Candidate.status |
-| `POST /api/candidates/{id}/release_feedback` | `candidates.release_feedback` | - | Candidate |
 | `POST /api/candidates/{id}/reset` | `candidates.reset` | - | deletes Session + Plan |
 | `POST /api/candidates/{id}/reevaluate` | `evaluation.rerun` (503 on failure) | Evaluator | Session.report |
 | `DELETE /api/candidates/{id}` | `candidates.delete` | - | deletes all |
@@ -136,6 +135,7 @@ Every endpoint calls one service function.
 | `POST /api/i/{token}/audio` | `interviews.answer_audio` | Whisper, then as `/turn` | Session |
 | `GET /api/i/{token}/tts/{turn_id}` | `interviews.speak` | Piper | - |
 | `POST /api/i/{token}/end` | `interviews.end` | Evaluator in background | Session.state |
+| `POST /api/i/{token}/rating` | `interviews.rate` (only after the interview ends) | - | Session.experience |
 
 ### Pages and ops ([app.py](../backend/app.py))
 
@@ -145,6 +145,29 @@ Every endpoint calls one service function.
 | `GET /i/{token}` | `frontend/interview.html` |
 | `/static/*` | `frontend/` |
 | `GET /api/health` | key present, model chains |
+
+### Recruiter screens ([recruiter.js](../frontend/recruiter.js), hash routes)
+
+Shell: a fixed sidebar (Roles) and a top bar with a Back button and breadcrumbs.
+Reads go through a small cache in `recruiter.js` (`get`): a page draws from the last copy at once, asks the server
+again in the background and redraws only if the answer changed; every write (`send`) clears the cache.
+Styles: [style.css](../frontend/style.css) on [tokens.css](../frontend/tokens.css) + [base.css](../frontend/base.css)
+(Hallmark Cobalt palette, Familjen Grotesk heads, IBM Plex Sans body, one 1.2 type scale, 14px minimum).
+The candidate room ([interview.html](../frontend/interview.html)) uses the same light system for the lobby
+(device check, resume, consent), the call and the end screen ([call.css](../frontend/call.css)). The call shows
+"Part N of M" from the session's sections, never coverage or scores; integrity notices appear as a side toast. Tab and
+window switches are one check in the report, because browsers cannot reliably tell them apart.
+
+| Route | Screen |
+|-------|--------|
+| `#/` | Roles table (candidates, interviewed, to review, length, brief version) and Create role |
+| `#/new` | Create role: job description, upload or template, then build |
+| `#/role/{id}[/candidates/{filter}]` | Candidates table with status filters, copy link, reset, delete, compare picks |
+| `#/role/{id}/plan` | Interview plan: time bar, one row per section; Edit plan saves `sections` |
+| `#/role/{id}/scoring` | Criteria with weight share, bars on expand; Edit scoring saves `criteria` |
+| `#/role/{id}/settings` | Title, company, length, interviewer notes; the job description it was built from |
+| `#/role/{id}/compare/{ids}` | Two to four candidates side by side |
+| `#/report/{id}[/{tab}]` | Report: decision, stat strip, summary, then tabs (evidence, transcript, resume fit, integrity checks, the candidate's own rating). Download prints a separate report document, not the screen |
 
 ## A5. The agents
 
@@ -212,8 +235,8 @@ run_agent(SPEC, **data) ──► llm.json(output=Model) ──► validated Mod
 | Tier / limits | strong, 6000 tokens, temp 0.2 |
 | Called from | `_evaluate` (background after the interview, or `reevaluate`) |
 | Input | criteria, resume highlights and claims, slot values, full transcript with timestamps |
-| Output | per criterion rating, score, rationale, evidence quotes; summary, strengths, concerns, resume_flags, recommendation, candidate_feedback |
-| Code tools | [`build_report`](../backend/agents/evaluator/tools.py): [`quote_found`](../backend/agents/evaluator/tools.py) per quote, unverified criteria excluded, weighted score |
+| Output | per criterion rating, score, rationale, evidence quotes; summary, strengths, concerns, resume_flags, recommendation |
+| Code tools | [`build_report`](../backend/agents/evaluator/tools.py): [`quote_found`](../backend/agents/evaluator/tools.py) per quote, unverified criteria excluded; scores 1-10 in bands (below 1-4, meets 5-7, above 8-10); weighted overall only when quote-backed criteria carry half the weight; reject under 5, advance from 6 |
 | On failure | logged; session marked DONE with no report |
 
 ### Non-agent LLM calls
@@ -319,7 +342,7 @@ sequenceDiagram
     EV-->>A: Report
     A->>S: Session.report, state = DONE
     A->>S: Candidate.status = completed
-    Note over A: Recruiter then: GET /api/candidates/{id}, decision, release_feedback
+    Note over A: Recruiter then: GET /api/candidates/{id}, decision; candidate: POST /api/i/{token}/rating
 ```
 
 ## A7. Data model
@@ -336,11 +359,11 @@ classDiagram
     class Target { target_id, name, intent, opening_question, time_budget_sec, priority, slots: Slot[] }
     class Slot { slot_id, desc, required }
     class Criterion { criterion_id, name, description, weight, above_bar, meets_bar, below_bar }
-    class Candidate { candidate_id, token, role_id, name, email, resume, status, plan_id, session_id, feedback_released }
+    class Candidate { candidate_id, token, role_id, name, email, resume, status, plan_id, session_id }
     class InterviewPlan { plan_id, role_id, candidate_id, targets: Target[] (copy), resume_highlights, claims_to_verify, fit, stt_hint }
     class Session { session_id, plan_id, candidate_id, state, elapsed_sec, current_target_id, targets: TargetState{}, turns: Turn[], flags: Flag[], usage: Usage[], report: Report }
     class TargetState { status, time_used_sec, probe_count, slots: SlotState{} }
-    class Report { overall_score, recommendation, criteria: CriterionResult[], strengths, concerns, resume_flags, candidate_feedback }
+    class Report { overall_score, recommendation, criteria: CriterionResult[], strengths, concerns, resume_flags }
     Role "1" --> "*" Target
     Target "1" --> "*" Slot
     Role "1" --> "*" Criterion
@@ -444,141 +467,211 @@ All in [integrations/llm.py](../backend/integrations/llm.py) (`GroqLLM.json`), t
 
 ---
 
-# Part B - Target system design
+# Part B - v2 design
 
-Detail and reasoning: [backend-audit.md sections 5 and 8](backend-audit.md#5-target-design).
+What v2 adds and how it fits the code in Part A. Requirements: [requirements.md](requirements.md). Tasks:
+[TASKS.md](../TASKS.md) Phases 5 to 14. Sections move into Part A as each phase is built.
 
-## B1. Target architecture
+## B1. High-level design
 
 ```mermaid
-flowchart TB
-    subgraph Clients
-        REC(["Recruiter UI"])
-        CAN(["Candidate UI"])
+flowchart LR
+    subgraph Browser
+        HOME["Home, login, sign up<br/>index.html, login.html"]
+        APP["Recruiter app<br/>app.html + js/app/*"]
+        ADM["Admin<br/>admin.html + js/admin/*"]
+        ROOM["Interview room<br/>interview.html + js/room/*"]
     end
 
-    subgraph API["api/ - HTTP only"]
-        AUTH["auth.py<br/>recruiter session"]
-        RAPI["recruiter.py"]
-        CAPI["candidate.py<br/>token auth"]
-        VIEWS["views.py<br/>response shapes"]
+    subgraph Space["Hugging Face Space (Docker, one uvicorn worker)"]
+        API["api/ - auth, recruiter, admin, candidate"]
+        SVC["services/ - use cases, the only DB access"]
+        JOBS["jobs worker loop<br/>prep, evaluation, idle sweep"]
+        CORE["agents/, engine/, safety/ - no I/O"]
     end
 
-    subgraph SVC["services/ - use cases, the only orchestrators"]
-        SROLE["roles.py"]
-        SCAND["candidates.py"]
-        SINT["interviews.py"]
-        SEVAL["evaluation.py"]
-        SJOB["jobs.py<br/>persisted runner + sweeper"]
-    end
+    PG[("Supabase Postgres")]
+    OBJ[("Supabase Storage")]
+    GROQ["Groq: LLMs + Whisper STT"]
+    TTS["Deepgram Aura-2 TTS<br/>(browser speech fallback)"]
 
-    subgraph DOMAIN["Pure logic, no I/O"]
-        subgraph AG["agents/ (AgentSpec each)"]
-            A1["role_compiler"]
-            A2["role_refine"]
-            A3["candidate_prep"]
-            A4["turn_agent"]
-            A5["evaluator"]
-        end
-        ENG["engine/<br/>state_machine, policy,<br/>context, heuristics"]
-        SAFE["safety/<br/>pii, injection"]
-    end
-
-    subgraph INT["integrations/"]
-        LLM["llm.py<br/>run_agent, chains, repair"]
-        GROQ["groq.py<br/>transport + retry"]
-        STT["stt.py"]
-        TTS["tts.py"]
-        DOCS["documents.py"]
-    end
-
-    subgraph DATA["Storage"]
-        REPO["db.py + tables.py<br/>SQLAlchemy"]
-        PG[("Postgres<br/>(SQLite in tests)")]
-        OBJ[("Object storage<br/>original files")]
-    end
-
-    REC --> AUTH --> RAPI
-    CAN --> CAPI
-    RAPI & CAPI --> VIEWS
-    RAPI --> SROLE & SCAND & SEVAL
-    CAPI --> SCAND & SINT
-    SINT --> ENG & SAFE
-    SROLE & SCAND & SINT & SEVAL --> LLM
-    LLM --> AG
-    SINT --> STT & TTS
-    SROLE & SCAND --> DOCS
-    SEVAL & SINT --> SJOB
-    LLM & STT --> GROQ
-    SVC --> REPO --> PG
-    REPO --> OBJ
+    HOME & APP & ADM -->|session cookie| API
+    ROOM -->|private link token| API
+    API --> SVC --> PG
+    SVC --> CORE
+    SVC --> GROQ
+    SVC --> TTS
+    SVC --> OBJ
+    JOBS --> SVC
 ```
 
-Rules that keep it navigable:
+Why one process: the free Space gives one container. Async I/O lets one worker serve many interviews at once,
+because every slow step (LLM, STT) is a network wait. Correctness never depends on being the only process: jobs are
+claimed with `FOR UPDATE SKIP LOCKED` and turn writes check a version column, so a second instance would be safe.
 
-1. `api/` never imports `agents/`, `engine/` or `store/` directly; it calls one service function per route.
-2. `services/` is the only layer that combines agents, the engine and the database.
-3. `agents/` and `engine/` have no I/O: given inputs, they return outputs. Easy to test, easy to read.
-4. `integrations/` is the only place that talks to the outside world (Groq, ffmpeg, Piper, file parsing).
-5. Only `services/` touches the database.
+The real ceiling is the Groq free tier (requests and tokens per minute), not the server. Admission control (B5)
+turns that limit into a clear message instead of slow or failed turns.
 
-## B2. One agent, one folder
+## B2. Users and access
+
+| Who | Proves identity with | Can reach |
+|-----|---------------------|-----------|
+| Visitor | nothing | home, login, sign up, demo report |
+| Recruiter (pending) | session cookie | own profile, demo account data (read-only) |
+| Recruiter (active) | session cookie | own roles, candidates, interviews, reports |
+| Admin | session cookie + `is_admin` | admin pages, plus everything a recruiter can do with their own data |
+| Candidate | private link token (hashed in DB) | their own interview, only inside its window |
+
+Rules:
+- Sessions: random 32-byte token in an HttpOnly, Secure, SameSite=Lax cookie; only its SHA-256 is stored, so a
+  database leak cannot log anyone in. 14-day expiry; logout deletes the row.
+- Passwords: `hashlib.scrypt` with a random salt (standard library, no new dependency).
+- CSRF: SameSite=Lax plus JSON-only bodies on mutating routes (a cross-site form cannot send JSON).
+- Ownership is checked in services, never in the frontend. Someone else's id returns 404, the same as a missing one.
+
+## B3. Data model (v2)
+
+Changes on top of Part A's schema, all in migration `0004`:
+
+| Table | Change | Why |
+|-------|--------|-----|
+| `recruiters` | + `name`, `status` (pending/active/disabled), `is_admin` | approval flow, admin |
+| `auth_sessions` | new: `token_hash` (unique), `recruiter_id`, `expires_at` | login sessions |
+| `roles` | `recruiter_id` not null, indexed | ownership; every list query starts here |
+| `candidates` | `token` becomes `token_hash`; + `opens_at`, `closes_at`; drop `feedback_released` | hashed links, scheduling |
+| `role_versions` | brief gains `integrity` (standard/strict) | strict mode per role |
+| `sessions` | + `version` integer | stale-write check (B5) |
+| `jobs` | used (exists) | persisted background work |
+| `decisions` | used (exists) | decision audit log |
+
+```mermaid
+erDiagram
+    recruiters ||--o{ auth_sessions : "logs in"
+    recruiters ||--o{ roles : owns
+    roles ||--o{ role_versions : "has versions"
+    roles ||--o{ candidates : has
+    candidates ||--o{ interview_plans : "one current"
+    role_versions ||--o{ interview_plans : "built on"
+    interview_plans ||--|| sessions : runs
+    sessions ||--o{ turns : "append-only"
+    sessions ||--o{ evaluations : "every run kept"
+    candidates ||--o{ decisions : "audit log"
+```
+
+Ownership path: `recruiter -> roles -> candidates -> plans -> sessions`. Services join from `roles.recruiter_id` once,
+through one helper, instead of each query repeating the check.
+
+Storage budget (500 MB free): text only. No audio is stored; original uploads go to Storage (1 GB free). A 10-minute
+interview is about 30 turns of text plus one report, a few tens of KB.
+
+## B4. Backend layout (v2)
+
+New files are marked `+`. Layer rules from Part A stay: api calls one service function per route; only services
+touch the database; agents and the engine do no I/O.
 
 ```
-agents/evaluator/
-  spec.py       AgentSpec: tier, limits, prompt_version, input model, output model, postprocess, failure mode
-  prompt.md     the prompt (output example generated from the output model)
-  tools.py      verify_quotes, clamp_scores, weighted_score, derive_recommendation
-  test_evaluator.py
+backend/
+  app.py                 builds the app, mounts pages, starts and stops the jobs loop
+  config.py  db.py  tables.py  models.py
+  api/
+    deps.py            + current_recruiter, current_admin, candidate_by_token
+    auth.py            + sign up, log in, log out, me
+    admin.py           + recruiters, approve, disable, usage, live interviews
+    recruiter.py         roles, candidates, schedule, invite, reports, trace
+    candidate.py         the interview by private link
+    views.py             response shapes
+  services/
+    accounts.py        + passwords, sessions, approval
+    jobs.py            + enqueue, claim, run, retry, requeue, idle sweep
+    roles.py  candidates.py  interviews.py  evaluation.py  sessions.py
+  agents/  engine/  integrations/   unchanged structure
+  safety/
+    pii.py  integrity.py (+ strict checks)
 ```
 
-Opening any agent folder answers the same four questions in the same order: **what goes in, what comes out, what
-code checks it, what happens when it fails.**
+## B5. Concurrency and async work
 
-## B3. Old file -> new home (done in Phases 2 to 4)
+| Concern | Design |
+|---------|--------|
+| Slow LLM calls | No DB transaction is open during an LLM or STT call (read, call, write). A slow model never holds one of the few pooled connections. |
+| Two writes to one interview | `sessions.version`: the turn write is `UPDATE ... WHERE id = ? AND version = ?`; zero rows means someone else wrote first, so the request gets 409 and the room reloads state. The in-memory per-candidate lock stays as a fast path within one process. |
+| Two tabs on one link | The room sends a client id; a turn from a different client than the one holding the interview gets 409 ("this interview is open in another tab"). |
+| Background work | `jobs` rows. The worker loop claims one due job with `FOR UPDATE SKIP LOCKED`, runs it, records the result or the error with backoff. Max 3 attempts. |
+| Restart | On startup, `running` jobs go back to `queued`. Interviews keep their state in the DB, so the room continues after a reload. |
+| Abandoned interviews | The same loop ends interviews with no turn for 10 minutes and queues their evaluation. |
+| Capacity | `MAX_LIVE_INTERVIEWS`: count of sessions in progress with activity in the last 2 minutes. Over the limit, start returns 503 with a retry message. |
+| LLM rate limits | Already shared in `integrations/llm.py`: limited models are skipped until their limit clears. |
+| Memory | Per-candidate locks are removed when released; no voice model in memory (hosted TTS); no transcript or audio is cached in memory between requests. |
+| DB connections | Pool 3 + 2 overflow on the Supabase pooler. Requests hold a connection only for their short read and write. |
 
-| Today | Moves to |
-|-------|----------|
-| `app.py` routes (recruiter) | `api/recruiter.py` |
-| `app.py` routes (candidate) | `api/candidate.py` |
-| `app.py` `_summary`, `_interview_view`, report shaping | `api/views.py` |
-| `app.py` `_prepare`, `add_candidate`, `upload_resume`, reset, delete, decide | `services/candidates.py` |
-| `app.py` `start_interview`, `interview_turn`, `interview_audio`, `end_interview` | `services/interviews.py` |
-| `app.py` `_evaluate`, `_evaluate_later`, `reevaluate` | `services/evaluation.py` + `services/jobs.py` |
-| `app.py` `_locks`, `_tasks` | `services/jobs.py` (jobs), DB row locks (turns) |
-| `documents.py` (pulled out of `app.py` in task 1.9) | `integrations/documents.py` |
-| `app.py` `_NOISE` | `integrations/stt.py` |
-| `agents/role_compiler.py` `compile_role` | `agents/role_compiler/` |
-| `agents/role_compiler.py` `refine_role` | `agents/role_refine/` |
-| `agents/role_compiler.py` `apply_compiled` | `agents/role_compiler/tools.py` (`validate_brief`), shared with refine and manual edits |
-| `agents/candidate_prep.py` | `agents/candidate_prep/` |
-| `agents/evaluator.py` | `agents/evaluator/` |
-| `engine/engine.py` Turn Agent call + prompt render | `agents/turn_agent/` + `services/interviews.py` |
-| `engine/engine.py` `new_session`, `start`, `_tick`, `_advance`, `_apply_updates`, `_next_question` | `engine/state_machine.py` |
-| `engine/engine.py` `_similar`, `_fresh_ack` | `engine/heuristics.py` |
-| `engine/policy.py` rules | `engine/policy.py` (limits read from role version policy) |
-| `engine/policy.py` `PII_PATTERNS`, `find_pii` | `safety/pii.py` |
-| `engine/context.py` | `engine/context.py` (unchanged) |
-| `llm/client.py` | `integrations/llm.py` (+ `run_agent`) and `integrations/groq.py` |
-| `voice.py` | `integrations/stt.py`, `integrations/tts.py` |
-| `prompts.py` | `integrations/llm.py` (single-pass render) |
-| `store.py` | `db.py` + `tables.py` (SQLAlchemy, cloud Postgres); `store.py` deleted |
-| `models.py` | `models/role.py`, `candidate.py`, `session.py`, `report.py` (API + agent contracts); DB tables in `store/tables.py` |
+## B6. Agent context management
 
-## B4. Target request flow (one turn)
+| Agent | Gets | Bounded by |
+|-------|------|-----------|
+| Turn Agent | instructions, section intent, slot states (the memory), next section's bridge question, resume highlights, claims to verify, last 4 turns | slots are short and fixed per section; transcript is never sent whole |
+| Evaluator | brief, criteria, full transcript, plan | interview time budget (about 30 turns) |
+| Candidate Prep | brief, resume text | resume capped at upload |
+| Role Compiler / Refine | JD or document text, notes | document capped at upload |
+
+Fixed instructions first, per-call data last, so Groq's prompt cache hits on the prefix (Phase 2.8). Phase 9.1 adds a
+test that the Turn Agent input stays under a token limit at turn 40.
+
+Intent regulation: the Turn Agent proposes (slot updates, the gap to probe, the reply, `injection_suspected`). The
+engine decides: section changes, timing, probe limits, and, from Phase 9.2, replacing a reply that would answer the
+question for the candidate, and holding the section when injection is flagged.
+
+## B7. Integrity (strict mode)
+
+| Check | Standard | Strict | How |
+|-------|----------|--------|-----|
+| Tab switch, window focus loss | logged | logged, interview pauses | `visibilitychange`, `blur` |
+| Full screen | asked | required to start and to continue | Fullscreen API |
+| Copy, paste, right-click, select | logged | blocked and logged | DOM events, `preventDefault` |
+| Second screen | logged | logged | `screen.isExtended` |
+| Second tab on the link | 409 | 409 | client id (B5) |
+| Browser extensions | logged | start blocked when one is found | known injected markers, `chrome-extension://` resources, unknown injected elements |
+
+Limits, stated in the lobby and the report: a web page cannot list or switch off extensions, a phone browser has no
+reliable full-screen lock, and a second device is invisible. Signals are shown on the report timeline and never
+change the score.
+
+## B8. Frontend layout (v2)
+
+Vanilla ES modules, no build step. Pages are separate HTML files so each loads only its own code.
 
 ```
-POST /api/i/{token}/audio
-  api/candidate.py           auth by token, size cap, call service
-  services/interviews.py     answer_by_voice(token, audio)
-    integrations/stt.py        ffmpeg + Whisper + noise filter            -> text
-    store (transaction)        load session state, lock row
-    engine/state_machine.py    record_user_turn (tick, dedupe)            -> turn
-    safety/pii.py              flags
-    engine/context.py          state block
-    integrations/llm.py        run_agent(turn_agent, input)               -> TurnOut + Usage
-    engine/state_machine.py    apply(TurnOut) -> next question, transitions
-    store (commit)             insert turns, update slot_states, insert llm_call
-    services/jobs.py           enqueue evaluation if ended
-  api/views.py               candidate view
+frontend/
+  index.html  login.html  signup.html  app.html  admin.html  interview.html
+  assets/      logo.svg  favicon.svg
+  css/         tokens.css  base.css  components.css  app.css  room.css  home.css
+  js/lib/      api.js (fetch + errors + 401 redirect)  store.js  router.js  dom.js  ui.js
+  js/app/      roles.js  role.js  candidates.js  report.js  compare.js  trace.js
+  js/admin/    recruiters.js  usage.js
+  js/room/     lobby.js  room.js  voice.js  integrity.js
 ```
+
+State: `store.js` holds one plain object per page with `get`, `set` and `subscribe`; screens render from it.
+Server data is fetched by the screen that shows it and kept only while that screen is open. The route (screen and
+ids) lives in the URL hash, so reload and back work.
+
+## B9. Deployment
+
+```
+GitHub repo --(push)--> GitHub Actions: ruff + pytest
+           --(sync)--> Hugging Face Space (Docker)
+                         Dockerfile: python:3.12-slim + ffmpeg + uv
+                         start: alembic upgrade head && uvicorn backend.app:app --port 7860
+                         secrets: DATABASE_URL, GROQ_API_KEY, DEEPGRAM_API_KEY, SUPABASE_*, ADMIN_EMAIL, SESSION_SECRET
+                       -> Supabase prod project (Mumbai) for Postgres and Storage
+```
+
+## B10. Testing
+
+| Level | What | Where |
+|-------|------|-------|
+| Unit | agent tools, engine rules, integrity summary, password and token hashing | `tests/` with the fake LLM |
+| Service | each flow end to end on in-memory SQLite | `tests/test_flow.py` and new files per phase |
+| Access | every route: 401 logged out, 404 on another recruiter's ids, admin-only refused | one parametrised test over the route list |
+| Concurrency | job claimed once, restart requeue, stale write 409, admission limit | `tests/test_jobs.py`, `tests/test_concurrency.py` |
+| Real LLM | sim personas strong, vague, bluffer, injector | `./run.sh sim` |
+| UI | manual checklist per screen at 375, 768 and 1280 px | TASKS Phase 12.6 |

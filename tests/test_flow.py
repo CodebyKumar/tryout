@@ -64,16 +64,18 @@ def test_recruiter_to_report_flow(client):
     own, impact = report["criteria"]
     assert own["verified"] and own["evidence"][0]["at"]
     assert not impact["verified"] and impact["evidence"] == []  # fabricated quote rejected
-    assert report["overall_score"] == 4.5  # only verified criteria count
+    assert report["overall_score"] == 9  # only verified criteria count
     assert (report["model"], report["prompt_version"]) == ("fake", evaluator.SPEC.prompt_version)
     assert rep["candidate"]["status"] == "completed"
 
-    assert c.get(f"/api/i/{token}").json()["feedback"] is None
-    c.post(f"/api/candidates/{cand['candidate_id']}/release_feedback")
-    assert "retry design" in c.get(f"/api/i/{token}").json()["feedback"]
+    assert c.get(f"/api/i/{token}").json()["rated"] is False
+    assert c.post(f"/api/i/{token}/rating", json={"stars": 6}).status_code == 422
+    assert c.post(f"/api/i/{token}/rating", json={"stars": 4, "comment": " Clear questions "}).status_code == 200
+    assert c.get(f"/api/i/{token}").json()["rated"] is True
+    assert c.get(f"/api/candidates/{cand['candidate_id']}").json()["experience"]["comment"] == "Clear questions"
     c.post(f"/api/candidates/{cand['candidate_id']}/decision", json={"status": "advanced"})
     ranked = c.get(f"/api/roles/{role['role_id']}").json()["candidates"]
-    assert ranked[0]["status"] == "advanced" and ranked[0]["score"] == 4.5
+    assert ranked[0]["status"] == "advanced" and ranked[0]["score"] == 9
 
 
 def test_policy_and_parsing():
@@ -103,3 +105,30 @@ def test_policy_and_parsing():
     }
     assert not pii.find_pii("about 300 users use it")
     assert parse_json('```json\n{"a": [1, 2,],}\n```') == {"a": [1, 2]}
+
+
+def test_role_templates(client):
+    c, _ = client
+    found = c.get("/api/templates").json()
+    assert len(found) >= 4 and all(t["title"] and t["summary"] and len(t["jd"]) > 200 for t in found)
+    assert "digital_design_intern" in [t["id"] for t in found]
+
+
+def test_integrity_events_are_kept_summarised_and_never_scored(client):
+    c, _ = client
+    role = c.post("/api/roles", json={"title": "Backend Engineer", "jd": "We need a backend engineer. " * 5}).json()
+    token = c.post(
+        f"/api/roles/{role['role_id']}/candidates", json={"name": "Riya Pillai", "resume": "Acme Pay"}
+    ).json()["token"]
+    c.post(f"/api/i/{token}/start")
+    away = [{"kind": "tab_hidden", "at_sec": 20, "seconds": 8}] * 3
+    r = c.post(
+        f"/api/i/{token}/events", json={"events": [*away, {"kind": "paste", "at_sec": 40, "detail": "42 characters"}]}
+    )
+    assert r.status_code == 200
+    assert c.post(f"/api/i/{token}/events", json={"events": [{"kind": "hack", "at_sec": 1}]}).status_code == 422
+    cid = c.get(f"/api/roles/{role['role_id']}").json()["candidates"][0]["candidate_id"]
+    summary = c.get(f"/api/candidates/{cid}").json()["integrity"]
+    assert summary["level"] == "review" and summary["times_away"] == 3 and summary["away_sec"] == 24
+    assert summary["counts"] == {"tab_hidden": 3, "paste": 1}
+    assert "integrity" not in c.get(f"/api/i/{token}").text  # the candidate view never shows it

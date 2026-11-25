@@ -5,3 +5,4 @@ data/
 *.pyc
 .pytest_cache/
 .run/
+.hallmark/

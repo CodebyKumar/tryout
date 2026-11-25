@@ -22,13 +22,13 @@ def crit(cid, rating, score=None, turn_id="u2", quote="I wrote the idempotent re
 
 def test_score_clamped_into_rating_band(role):  # B5
     rep = build_report(
-        role, session(), {"criteria": [crit("ownership", "below_bar", 5), crit("impact", "above_bar", 1)]}
+        role, session(), {"criteria": [crit("ownership", "below_bar", 9), crit("impact", "above_bar", 1)]}
     )
-    assert [c.score for c in rep.criteria] == [2.4, 4.0]
+    assert [c.score for c in rep.criteria] == [4.9, 8.0]
 
 
 def test_quote_with_wrong_turn_id_is_found(role):  # B6
-    rep = build_report(role, session(), {"criteria": [crit("ownership", "meets_bar", 3, turn_id="u9")]})
+    rep = build_report(role, session(), {"criteria": [crit("ownership", "meets_bar", 6, turn_id="u9")]})
     assert rep.criteria[0].verified and rep.criteria[0].evidence[0].turn_id == "u2"
 
 
@@ -40,19 +40,20 @@ def test_recommendation_comes_from_verified_scores(role):  # B4
     rep = build_report(
         role,
         session(),
-        data | {"criteria": [crit("ownership", "above_bar", 5, quote=fake), crit("impact", "above_bar", 5)]},
+        data | {"criteria": [crit("ownership", "above_bar", 9, quote=fake), crit("impact", "above_bar", 9)]},
     )
     assert rep.recommendation == "hold" and "evaluator suggested advance" in rep.recommendation_reason
+    assert rep.overall_score is None  # impact alone is a third of the rubric's weight: no overall score
 
     rep = build_report(
-        role, session(), data | {"criteria": [crit("ownership", "above_bar", 5), crit("impact", "meets_bar", 3)]}
+        role, session(), data | {"criteria": [crit("ownership", "above_bar", 9), crit("impact", "meets_bar", 6)]}
     )
-    assert rep.recommendation == "advance" and rep.recommendation_reason == "Great"
+    assert rep.recommendation == "advance" and rep.recommendation_reason == "Great" and rep.overall_score == 8.0
 
     rep = build_report(
-        role, session(), data | {"criteria": [crit("ownership", "below_bar", 2), crit("impact", "above_bar", 5)]}
+        role, session(), data | {"criteria": [crit("ownership", "below_bar", 3), crit("impact", "above_bar", 9)]}
     )
     assert rep.recommendation == "reject"
 
-    rep = build_report(role, session(), data | {"criteria": [crit("ownership", "above_bar", 5, quote=fake)]})
+    rep = build_report(role, session(), data | {"criteria": [crit("ownership", "above_bar", 9, quote=fake)]})
     assert rep.recommendation is None and rep.overall_score is None

@@ -105,7 +105,6 @@ def run(c: TestClient, persona: str):
         for e in x["evidence"]:
             print(f'    [{e["at"]}] "{e["quote"]}"')
     print("Strengths:", r["strengths"], "\nConcerns:", r["concerns"], "\nResume flags:", r["resume_flags"])
-    print("Feedback:", r["candidate_feedback"])
     print("USAGE:", rep["usage"], f"total {time.time() - t0:.0f}s")
 
 

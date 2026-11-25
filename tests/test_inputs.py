@@ -61,6 +61,32 @@ def test_manual_edit_is_validated(client):  # B9
     assert c.put(f"/api/roles/{role['role_id']}", json={"sections": []}).status_code == 400
 
 
+def test_settings_edit_saves_title_company_notes(client):
+    c, _ = client
+    role = c.post("/api/roles", json={"title": "Backend Engineer", "jd": "We need a backend engineer. " * 3}).json()
+    url = f"/api/roles/{role['role_id']}"
+    r = c.put(url, json={"title": "Backend Engineer II", "company": "Acme"}).json()
+    assert (r["title"], r["company"], r["version"]) == ("Backend Engineer II", "Acme", 1)  # a rename is not a new brief
+    assert c.put(url, json={"title": "Backend Engineer II"}).json()["version"] == 1  # nothing changed
+    r = c.put(url, json={"notes": "Skip salary talk"}).json()
+    assert r["notes"] == "Skip salary talk" and r["version"] == 2
+    planned = sum(s["time_budget_sec"] for s in r["sections"])
+    r = c.put(url, json={"time_budget_sec": r["time_budget_sec"] * 2}).json()
+    assert r["version"] == 3 and sum(s["time_budget_sec"] for s in r["sections"]) > planned  # sections grow with it
+    listed = c.get("/api/roles").json()[0]
+    assert listed["company"] == "Acme" and listed["to_review"] == 0
+
+
+def test_candidate_email_is_checked(client):
+    c, _ = client
+    role = c.post("/api/roles", json={"title": "Backend Engineer", "jd": "We need a backend engineer. " * 3}).json()
+    url = f"/api/roles/{role['role_id']}/candidates"
+    assert c.post(url, json={"name": "Riya", "email": "riya@"}).status_code == 400
+    assert c.post(url, json={"name": " Riya ", "email": " Riya@Example.com "}).json()["email"] == "riya@example.com"
+    assert c.post(url, json={"name": "Riya P", "email": "riya@example.com"}).status_code == 400  # same role twice
+    assert c.post(url, json={"name": "Arjun"}).status_code == 200  # email stays optional for the API
+
+
 def test_tiny_budget_keeps_section_floor(role):
     role.time_budget_sec = 60
     data = {"sections": [s.model_dump() | {"time_budget_sec": 30} for s in role.sections], "criteria": ROLE["criteria"]}

@@ -2,8 +2,9 @@
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from ..models import ExperienceRating, IntegrityEvent
 from ..services import NotFound, candidates, interviews
 from . import MAX_AUDIO_BYTES, read_upload, views
 from .recruiter import read_document
@@ -13,6 +14,10 @@ router = APIRouter(prefix="/api/i/{token}")
 
 class TurnIn(BaseModel):
     text: str
+
+
+class EventsIn(BaseModel):
+    events: list[IntegrityEvent] = Field(max_length=50)
 
 
 @router.get("")
@@ -63,3 +68,15 @@ async def interview_tts(token: str, turn_id: str):
 @router.post("/end")
 async def end_interview(token: str):
     return views.interview(*await interviews.end(token))
+
+
+@router.post("/rating")
+async def rate_interview(token: str, body: ExperienceRating):
+    await interviews.rate(token, ExperienceRating(stars=body.stars, comment=body.comment.strip()))
+    return {"ok": True}
+
+
+@router.post("/events")
+async def integrity_events(token: str, body: EventsIn):
+    await interviews.record_integrity(token, body.events)
+    return {"ok": True}
