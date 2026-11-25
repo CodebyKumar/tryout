@@ -330,7 +330,7 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
 .dd-select .dd-menu { max-width: none; }
 
 /* ---------- "?" explanations ---------- */
-.tip { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 2px; border-radius: 50%; border: var(--rule-hair) solid var(--color-rule-2); color: var(--color-muted); font: 600 10px/1 var(--font-body); vertical-align: 1px; cursor: help; text-transform: none; letter-spacing: 0; }
+.tip { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 2px; border-radius: 50%; border: var(--rule-hair) solid var(--color-rule-2); color: var(--color-muted); font: 600 13px/1 var(--font-body); vertical-align: 1px; cursor: help; text-transform: none; letter-spacing: 0; }
 .tip:hover, .tip:focus-visible { color: var(--color-ink); border-color: var(--color-ink-2); }
 .tip::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: var(--z-tooltip); width: max-content; max-width: 260px; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-input); background: var(--color-ink); color: var(--color-accent-ink); font: 400 var(--text-xs)/1.45 var(--font-body); text-align: left; white-space: normal; opacity: 0; pointer-events: none; transition: opacity var(--dur-micro) var(--ease-out); }
 .tip:hover::after, .tip:focus-visible::after { opacity: 1; }
