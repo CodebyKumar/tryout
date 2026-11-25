@@ -16,13 +16,15 @@ async function openDemo(e) {
 }
 $$("[data-demo]").forEach((b) => b.addEventListener("click", openDemo));
 
-// The exchange plays once on load (CSS); Play again restarts it by re-adding the class on the next frame.
-$("#replay").addEventListener("click", () => {
-  const ex = $("#exchange");
-  ex.classList.remove("play");
-  requestAnimationFrame(() => requestAnimationFrame(() => ex.classList.add("play")));
-});
-$("#exchange").classList.add("play");
+// The exchange plays once, when its score row comes into view (on a phone that is below the fold), so the sweep and
+// the score are seen rather than finished off-screen. Play again restarts it by re-adding the class on the next frame.
+const ex = $("#exchange");
+const play = () => { ex.classList.remove("play"); requestAnimationFrame(() => requestAnimationFrame(() => ex.classList.add("play"))); };
+$("#replay").addEventListener("click", play);
+const seen = new IntersectionObserver(([entry]) => {
+  if (entry.isIntersecting) { seen.disconnect(); play(); }
+}, { threshold: 0.9 });
+seen.observe($(".ex-score"));
 
 const account = await me();
 if (account) {

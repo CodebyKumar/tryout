@@ -39,13 +39,13 @@
         </div>
         <div class="ex-row">
           <span class="ex-time">00:55</span><span class="ex-who">Riya</span>
-          <p>A payout stalled because the consumer crashed mid-transaction. <mark>I queried Postgres directly to correlate the idempotency key with the stuck record, confirming it hadn't reached the bank yet.</mark> <mark>I then manually triggered a retry through an internal admin endpoint.</mark></p>
+          <p>A payout stalled because the consumer crashed mid-transaction. <mark>I queried Postgres directly to correlate the idempotency key with the stuck record</mark>, confirming it hadn't reached the bank yet. I then manually triggered a retry through an internal admin endpoint.</p>
         </div>
         <div class="ex-score">
           <div class="ex-crit"><b>Production debugging</b><span class="pill meets">Meets the bar</span></div>
           <div class="ex-bar" aria-hidden="true"><i></i></div>
           <p class="ex-fig"><span class="fig">7</span><span class="unit">/ 10</span></p>
-          <p class="ex-proof"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Both quotes found in the transcript, so this score counts.</p>
+          <p class="ex-proof"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Quote found in the transcript, so this score counts.</p>
         </div>
       </figure>
       <p class="ex-note">The demo candidate is played by a second AI. The interviewer and the scoring are the real system.</p>
@@ -78,7 +78,6 @@
       <div class="principles-in wrap">
         <h2 id="rulesTitle">The AI proposes. Code decides.</h2>
         <ul class="rule-list">
-          <li><b>Quotes are checked</b>A rating counts only if its quote is in the transcript.</li>
           <li><b>Time is kept</b>Code moves between parts and caps follow-ups.</li>
           <li><b>No verdicts</b>The interviewer never tells a candidate they were right.</li>
           <li><b>Every turn is traced</b>See what the AI proposed and what code changed.</li>

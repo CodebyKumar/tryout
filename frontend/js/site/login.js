@@ -13,7 +13,7 @@ if (await me()) location.replace(target);
 document.title = `${signUp ? "Create account" : "Sign in"} - TryOut`;
 $("#title").textContent = signUp ? "Create your account" : "Sign in";
 $("#intro").textContent = signUp
-  ? "Look around at once. Creating roles and inviting candidates opens when the admin approves you."
+  ? "Look around now. Roles and invites open once an admin approves you."
   : "Welcome back. Use the email and password you signed up with.";
 $("#nameField").hidden = !signUp;
 $("#pwHint").hidden = !signUp;

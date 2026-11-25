@@ -2,19 +2,22 @@
    real exchange from the demo, the highlighter sweeping the quoted sentences, then the score filling in. Cobalt is
    the only signal colour; highlighter yellow appears only on quoted evidence. */
 
-body.site { min-height: 100vh; display: flex; flex-direction: column; background: var(--color-paper); }
+body.site { --text-md: 1.125rem; min-height: 100vh; display: flex; flex-direction: column; background: var(--color-paper); }
 .site-top, .site-foot, .wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: var(--space-xl); }
 .hero, .close { padding-inline: var(--space-xl); }
 .site-top { display: flex; align-items: center; justify-content: space-between; height: 76px; }
 .site-nav { display: flex; align-items: center; gap: var(--space-xs); }
+body.site .btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); }
+body.site .btn.primary:hover { background: var(--color-accent-deep); border-color: var(--color-accent-deep); }
 .btn.big { min-height: 52px; padding: 0 28px; font-size: var(--text-md); border-radius: 10px; }
 
 /* ---------- hero: claim, actions, then the exchange ---------- */
 .hero { padding-block: var(--space-xl) var(--space-2xl); text-align: center; }
 .hero h1 { max-width: 17ch; margin-inline: auto; font: 700 clamp(2.5rem, 5.4vw, 4.5rem)/1 var(--font-display); letter-spacing: -0.04em; text-wrap: balance; }
-.deck { max-width: 34ch; margin: var(--space-md) auto 0; font-size: clamp(1.125rem, 1.6vw, 1.3125rem); line-height: 1.45; color: var(--color-ink-2); text-wrap: balance; }
+.deck { max-width: 64ch; margin: var(--space-md) auto 0; font-size: clamp(1.125rem, 1.6vw, 1.3125rem); line-height: 1.45; color: var(--color-ink-2); text-wrap: balance; }
 .hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-lg); }
-.demo-status { min-height: 1.5em; margin-top: var(--space-xs); }
+.demo-status { margin-top: var(--space-xs); }
+.demo-status:empty { display: none; }
 
 .exchange { max-width: 920px; margin: var(--space-lg) auto 0; padding: 0; text-align: left; background: var(--color-surface); border: 1px solid var(--color-rule); border-radius: 16px; box-shadow: 0 30px 70px -36px oklch(30% 0.09 258 / 0.42), 0 2px 6px oklch(30% 0.05 258 / 0.06); overflow: hidden; }
 .ex-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--color-rule); background: var(--color-paper-2); font-size: var(--text-sm); color: var(--color-ink-2); }
@@ -28,20 +31,20 @@ body.site { min-height: 100vh; display: flex; flex-direction: column; background
 /* The highlighter: a yellow band that sweeps left to right across each quoted sentence, one after the other. */
 .exchange mark { padding: 1px 2px; border-radius: 3px; color: var(--color-mark-ink); background: linear-gradient(var(--color-mark), var(--color-mark)) no-repeat 0 0 / 100% 100%; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .exchange.play mark { animation: sweep 900ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-.exchange.play mark + mark { animation-delay: 950ms; }
 @keyframes sweep { from { background-size: 0% 100%; } }
 
 .ex-score { display: grid; grid-template-columns: minmax(0, 1fr) 280px auto; grid-template-areas: "crit bar fig" "proof proof proof"; align-items: center; gap: 10px var(--space-md); padding: 20px 24px 22px; background: var(--color-accent-wash); }
 .ex-crit { grid-area: crit; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-xs); font-size: 1.0625rem; }
 .ex-bar { grid-area: bar; height: 10px; border-radius: 99px; background: color-mix(in oklab, var(--color-accent) 16%, var(--color-surface)); overflow: hidden; }
 .ex-bar i { display: block; width: 70%; height: 100%; border-radius: inherit; background: var(--color-accent); transform-origin: left; }
-.exchange.play .ex-bar i { animation: fill 1100ms cubic-bezier(0.16, 1, 0.3, 1) 1800ms both; }
+.exchange.play .ex-bar i { animation: fill 1100ms cubic-bezier(0.16, 1, 0.3, 1) 950ms both; }
+.exchange.play .ex-fig, .exchange.play .ex-crit .pill { animation: appear 500ms ease-out 950ms both; }
 @keyframes fill { from { transform: scaleX(0); } }
 .ex-fig { grid-area: fig; white-space: nowrap; }
 .ex-fig .fig { font-size: 2.25rem; line-height: 1; color: var(--color-accent-deep); }
 .ex-fig .unit { margin-left: 4px; color: var(--color-ink-2); }
 .ex-proof { grid-area: proof; display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--color-success); font-weight: 500; }
-.exchange.play .ex-proof { animation: appear 500ms ease-out 2600ms both; }
+.exchange.play .ex-proof { animation: appear 500ms ease-out 1800ms both; }
 @keyframes appear { from { opacity: 0; transform: translateY(4px); } }
 .ex-note { margin-top: var(--space-sm); font-size: var(--text-sm); color: var(--color-muted); }
 
@@ -65,7 +68,7 @@ body.site { min-height: 100vh; display: flex; flex-direction: column; background
 /* ---------- the principles band: dark, short ---------- */
 .principles { padding: var(--space-2xl) 0; background: var(--color-graphite); color: var(--color-graphite-ink); }
 .principles-in { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: var(--space-xl); align-items: start; }
-.rule-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-lg) var(--space-xl); }
+.rule-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: var(--space-lg) var(--space-xl); }
 .rule-list li { display: grid; gap: 4px; color: var(--color-graphite-muted); font-size: var(--text-md); }
 .rule-list b { color: var(--color-graphite-ink); font: 600 1.1875rem/1.25 var(--font-display); letter-spacing: -0.01em; }
 
@@ -105,15 +108,16 @@ body.site { min-height: 100vh; display: flex; flex-direction: column; background
   .ex-score { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "crit fig" "bar bar" "proof proof"; }
 }
 @media (max-width: 40rem) {
-  .site-nav .btn.quiet { display: none; }
+  .site-nav .btn.quiet { padding-inline: 8px; }
+  .site-nav .btn.primary { padding-inline: 12px; }
   .auth-card { padding: 24px 20px; }
   .ex-row { grid-template-columns: 1fr; gap: 2px; padding: 14px 16px; }
   .ex-time, .ex-who { padding: 0; }
   .ex-head, .ex-score { padding-inline: 16px; }
   .rule-list { grid-template-columns: 1fr; }
-  .hero-actions .btn { flex: 1 1 100%; }
+  .hero-actions .btn { flex: 1 1 0; padding-inline: 12px; }
   .site-foot { flex-direction: column; align-items: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .exchange.play mark, .exchange.play .ex-bar i, .exchange.play .ex-proof { animation: none; }
+  .exchange.play mark, .exchange.play .ex-bar i, .exchange.play .ex-proof, .exchange.play .ex-fig, .exchange.play .ex-crit .pill { animation: none; }
 }
