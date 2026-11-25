@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from backend.agents import evaluator, role_compiler, turn_agent
 from backend.agents.base import render, run_agent
+from backend.agents.candidate_prep import spec as prep_spec
 
 VALUES = [
     "company",
@@ -64,3 +65,21 @@ def test_prompt_starts_with_static_text(agent):
     b = render(agent, **dict.fromkeys(VALUES, "second"))
     shared = len(os.path.commonprefix([a[0] + a[1], b[0] + b[1]]))
     assert shared / len(a[0] + a[1]) > 0.75
+
+
+def test_objects_sent_as_json_strings_are_read_not_renamed():
+    """A real Groq answer sent each fit item as a JSON string plus stray fragments; the score came out 11% instead
+    of about 80% because every string became a requirement named after its own JSON."""
+    out = prep_spec.FitOut.model_validate(
+        {
+            "items": [
+                {"requirement": "Python or Go", "must_have": True, "match": "strong"},
+                '{"requirement": "Designing reliable APIs", "must_have": true, "match": "strong"}',
+                '{ "requirement": "Payments domain", "must_ha',
+                ":",
+                "Kafka",
+            ]
+        }
+    )
+    assert [i.requirement for i in out.items] == ["Python or Go", "Designing reliable APIs", "Kafka"]
+    assert out.items[1].match == "strong"

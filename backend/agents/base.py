@@ -81,13 +81,30 @@ Strs = Annotated[
 ]
 
 
+def _as_object(x, name_key: str | None):
+    """One list item as a dict, or None for junk. Models sometimes send each object as a JSON string, or leave
+    stray fragments (":") in the list; a plain word or phrase becomes {name_key: phrase}."""
+    if isinstance(x, dict):
+        return x
+    if not isinstance(x, str) or not any(c.isalpha() for c in x):
+        return None
+    text = x.strip()
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            return None  # a broken fragment of an object, not a name
+        return parsed if isinstance(parsed, dict) else None
+    return {name_key: text} if name_key else None
+
+
 def objects(name_key: str | None = None) -> BeforeValidator:
-    """For a list of objects: drop junk items; a bare string becomes {name_key: string} ("Python" for {"name": ...})."""
+    """For a list of objects: keep dicts, read objects sent as JSON strings, turn a bare phrase into {name_key: phrase}
+    ("Python" for {"name": ...}), drop the rest."""
 
     def clean(v):
         if not isinstance(v, list):
             return []
-        keep = [x for x in v if isinstance(x, dict) or (name_key and isinstance(x, str) and x.strip())]
-        return [x if isinstance(x, dict) else {name_key: x.strip()} for x in keep]
+        return [o for o in (_as_object(x, name_key) for x in v) if o is not None]
 
     return BeforeValidator(clean)
