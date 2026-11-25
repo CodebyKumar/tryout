@@ -29,7 +29,7 @@ body.site .btn.primary:hover { background: var(--color-accent-deep); border-colo
 .ex-row:first-of-type p { color: var(--color-ink-2); }
 
 /* The highlighter: a yellow band that sweeps left to right across each quoted sentence, one after the other. */
-.exchange mark { padding: 1px 2px; border-radius: 3px; color: var(--color-mark-ink); background: linear-gradient(var(--color-mark), var(--color-mark)) no-repeat 0 0 / 100% 100%; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.exchange mark { padding: 1px 2px; border-radius: 3px; color: inherit; background: linear-gradient(var(--color-mark), var(--color-mark)) no-repeat 0 0 / 100% 100%; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .exchange.play mark { animation: sweep 900ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes sweep { from { background-size: 0% 100%; } }
 /* Armed (set by home.js before the panel is seen): the start of the animation, held until .play. */
