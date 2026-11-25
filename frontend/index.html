@@ -32,15 +32,15 @@
 
       <figure class="evidence-card" aria-label="An excerpt from a TryOut report">
         <div class="ec-head">
-          <div><h2>Production reliability</h2><span class="pill above">Above the bar</span></div>
-          <p class="ec-score"><span class="fig">8</span><span class="unit"> / 10</span></p>
+          <div><h2>Production debugging</h2><span class="pill meets">Meets the bar</span></div>
+          <p class="ec-score"><span class="fig">7</span><span class="unit"> / 10</span></p>
         </div>
-        <p class="ec-why">Shares a specific incident, root-cause analysis, and a measurable reduction in failed payouts.</p>
+        <p class="ec-why">Describes a specific production incident, root-cause analysis using Postgres queries, and a manual retry fix without redeploy.</p>
         <blockquote class="ec-line">
-          <span class="ec-time mono">00:17</span>
-          <p><span class="who">Riya</span>I owned the design of the retry mechanism, specifically implementing idempotency keys in a Postgres unique index alongside exponential backoff and a Kafka dead-letter queue. I also <mark>led the debugging of a critical double-payout incident in 2024</mark>, where I fixed the issue by enforcing an idempotency check before the payout call.</p>
+          <span class="ec-time mono">00:55</span>
+          <p><span class="who">Riya</span>I remember a specific case where a payout stalled because the consumer crashed mid-transaction, leaving the database in a pending state. <mark>I queried Postgres directly to correlate the idempotency key with the stuck record, confirming it hadn't reached the bank yet.</mark> <mark>I then manually triggered a retry through an internal admin endpoint, which allowed the state machine to pick up where it left off</mark> without needing a full redeploy.</p>
         </blockquote>
-        <figcaption>From the demo interview. The quote was found in the transcript, so this rating counts toward the score. The candidate was played by a second AI; the interviewer and the scoring are the real system.</figcaption>
+        <figcaption>From the demo interview. Both quotes were found in the transcript, so this rating counts toward the score. The candidate was played by a second AI; the interviewer and the scoring are the real system.</figcaption>
       </figure>
     </section>
 
