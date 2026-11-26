@@ -14,6 +14,7 @@ let stream = null, audioCtx = null, analyser = null, recorder = null, vadRaf = n
 // an answer is sent and reopen it after the interviewer finishes. The phone needs about a second to move audio back to
 // the loudspeaker, and that switch must never happen while the interviewer is talking, or words drop out.
 const ROUTE_SETTLE_MS = 1200;
+const SILENCE_END_MS = 1500; // this long a pause after speaking ends the answer; Done sends it at once
 let micReleasedAt = 0;
 const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
@@ -292,11 +293,17 @@ function stopVoice() { cancelAnimationFrame(voiceRaf); bars().forEach((b) => (b.
 function speakTurn(turn) {
   stopRecording(false);
   releaseMic(); // normally already released when the answer was sent
-  setPhase("speaking");
-  caption("Interviewer", turn.text);
   const after = () => { stopVoice(); agentAudio = null; if (live()) listen(); else finished(); };
-  if (!st.info.voice) return browserVoice(turn.text, after); // no voice service configured: skip the request
+  // The caption appears when the voice starts, not before it: the line and the sound arrive together. If the audio is
+  // slow to start, the text is shown anyway after a few seconds.
+  let shown = false;
+  const show = () => { if (shown) return; shown = true; setPhase("speaking"); caption("Interviewer", turn.text); };
+  if (!st.info.voice) { show(); return browserVoice(turn.text, after); } // no voice service configured
+  setPhase("thinking");
+  const late = setTimeout(show, 3000);
   agentAudio = new Audio(`/api/i/${token}/tts/${turn.turn_id}`);
+  agentAudio.preload = "auto";
+  agentAudio.addEventListener("playing", () => { clearTimeout(late); show(); }, { once: true });
   if (audioCtx) {
     const an = audioCtx.createAnalyser();
     an.fftSize = 64;
@@ -305,11 +312,12 @@ function speakTurn(turn) {
     agentAudio.onplay = () => animateVoice(an);
   } else agentAudio.onplay = () => animateVoice(null);
   agentAudio.onended = after;
-  agentAudio.onerror = () => browserVoice(turn.text, after);
+  const fallback = () => { clearTimeout(late); show(); browserVoice(turn.text, after); };
+  agentAudio.onerror = fallback;
   const audio = agentAudio;
   // Start only once the phone has finished moving audio to the loudspeaker (usually already true after "thinking").
   const wait = MOBILE ? Math.max(0, ROUTE_SETTLE_MS - (Date.now() - micReleasedAt)) : 0;
-  setTimeout(() => audio.play().catch(() => browserVoice(turn.text, after)), wait);
+  setTimeout(() => audio.play().catch(fallback), wait);
 }
 
 function browserVoice(text, after) {
@@ -336,7 +344,9 @@ function listen() {
   recorder.start(250);
 
   const t0 = performance.now();
-  let floor = 0, frames = 0, speechMs = 0, spoke = false, silenceAt = null, last = t0;
+  // Background level, tracked all the time from the quiet moments (it falls at once and rises slowly), so speaking
+  // straight away cannot be mistaken for the room's noise. The threshold is capped below normal speech.
+  let noise = 0.008, speechMs = 0, spoke = false, silenceAt = null, last = t0, loud = false;
   recorder._send = true;
   recorder.onstop = () => {
     cancelAnimationFrame(vadRaf);
@@ -348,14 +358,14 @@ function listen() {
 
   const tick = (now) => {
     const lvl = level(), dt = now - last; last = now;
-    if (now - t0 < 400) { floor += lvl; frames++; vadRaf = requestAnimationFrame(tick); return; }
-    const thr = Math.max(0.012, (floor / Math.max(1, frames)) * 2.5);
-    const loud = lvl > thr;
+    noise = lvl < noise ? lvl : noise + (lvl - noise) * 0.002;
+    const thr = Math.min(0.035, Math.max(0.012, noise * 3));
+    loud = loud ? lvl > thr * 0.7 : lvl > thr; // hysteresis: a word trailing off still counts as speech
     $("#meTile").classList.toggle("speaking", loud);
     if (loud) { speechMs += dt; if (speechMs > 300) spoke = true; silenceAt = null; }
     else if (spoke) {
       silenceAt ??= now;
-      if (now - silenceAt > 1800) return stopRecording(true); // 1.8 s of silence ends the answer
+      if (now - silenceAt > SILENCE_END_MS) return stopRecording(true);
     }
     if (now - t0 > 150000) return stopRecording(true);
     vadRaf = requestAnimationFrame(tick);

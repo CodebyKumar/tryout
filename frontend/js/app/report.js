@@ -126,6 +126,7 @@ export async function reportPage(id, tab, nav) {
   const first = esc(c.name.split(" ")[0]);
   const g = d.integrity;
   const tabs = [
+    ["summary", "Summary", null],
     ["evidence", "Evidence", r.criteria.length],
     ["transcript", "Transcript", d.transcript.length],
     ["resume", "Resume fit", null],
@@ -133,7 +134,7 @@ export async function reportPage(id, tab, nav) {
     ["trace", "How it decided", null],
     ["rating", "Candidate rating", null],
   ];
-  if (!tabs.some(([k]) => k === tab)) tab = "evidence";
+  if (!tabs.some(([k]) => k === tab)) tab = "summary";
   const list = (title, items) => `<div><h3>${title}</h3><ul class="side-list">${items.map((s) => `<li>${esc(s)}</li>`).join("") || "<li class='muted'>None noted</li>"}</ul></div>`;
   const decide = canWrite()
     ? `<div id="decide">${dropdown({ label: decision ? DECISION[decision] : "Make a decision", cls: `btn ${decision ? "" : "primary"}`, select: true, items: [
@@ -148,23 +149,28 @@ export async function reportPage(id, tab, nav) {
       <div class="actions"><button type="button" class="btn quiet no-print" id="download">Download</button>${decide}</div></div>
     ${d.decisions.length ? `<p class="hint decision-log">Decision history: ${d.decisions.map((x) => `${x.to ? DECISION[x.to] : "cleared"} on ${when(x.at)}`).join(", ")}</p>` : ""}
 
-    <dl class="stats">
-      <div><dt>Score</dt><dd>${r.overall_score != null ? `<span class="fig">${r.overall_score}</span><span class="unit"> / 10</span>` : `<span class="muted">Not enough evidence</span>`}</dd></div>
-      <div><dt>AI suggests ${tip("Worked out in code from the verified ratings, not taken from the model. The decision is yours.")}</dt><dd>${r.recommendation ? `<span class="pill ${r.recommendation}">${REC[r.recommendation]}</span>` : `<span class="pill">No suggestion</span>`}</dd></div>
-      <div><dt>Criteria met</dt><dd><span class="fig">${met}</span><span class="unit"> of ${r.criteria.length}</span></dd></div>
-      <div><dt>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</dt><dd>${d.fit?.score != null ? `<span class="fig">${d.fit.score}</span><span class="unit">%</span>` : `<span class="fig">-</span>`}</dd></div>
-      <div><dt>Integrity ${tip("Browser signals during the interview, such as leaving the tab. Context only, never scored. Details in the Integrity tab.")}</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : "-"}</dd></div>
-    </dl>
-
-    <section class="panel summary"><h2>Summary</h2>
+    <div class="role-layout">
+      <aside class="role-side">
+        <nav class="side-tabs" role="tablist" aria-label="Report">${tabs.map(([k, label, n]) => `<a href="#/report/${id}/${k}" role="tab" data-tab="${k}" aria-selected="${k === tab}" class="${k === tab ? "on" : ""}"><span>${label}</span>${n != null ? `<span class="count">${n}</span>` : ""}</a>`).join("")}</nav>
+        <section class="overview" aria-label="Overview">
+          <dl class="facts">
+            <div><dt>Score</dt><dd>${r.overall_score != null ? `${r.overall_score} / 10` : `<span class="muted">Not enough evidence</span>`}</dd></div>
+            <div><dt>AI suggests ${tip("Worked out in code from the verified ratings, not taken from the model. The decision is yours.")}</dt><dd>${r.recommendation ? `<span class="pill ${r.recommendation}">${REC[r.recommendation]}</span>` : `<span class="pill">None</span>`}</dd></div>
+            <div><dt>Criteria met</dt><dd>${met} of ${r.criteria.length}</dd></div>
+            <div><dt>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</dt><dd>${d.fit?.score != null ? `${d.fit.score}%` : "-"}</dd></div>
+            <div><dt>Integrity ${tip("Browser signals during the interview, such as leaving the tab. Context only, never scored.")}</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : "-"}</dd></div>
+            <div><dt>Length</dt><dd>${fmt(d.duration_sec)}</dd></div>
+          </dl>
+        </section>
+      </aside>
+      <div class="role-main">
+    <section class="pane summary" data-pane="summary">
       <p class="memo">${esc(r.summary)}</p>
       ${r.recommendation_reason ? `<p class="reason"><b>Why the suggestion:</b> ${esc(r.recommendation_reason)}</p>` : ""}
       <div class="lists">${list("Strengths", r.strengths)}${list("Concerns", r.concerns)}${r.resume_flags.length ? list("Resume claims not backed up", r.resume_flags) : ""}</div>
       ${d.flags.some((f) => f.type !== "injection") ? `<p class="hint">The candidate mentioned personal details (${[...new Set(d.flags.filter((f) => f.type !== "injection").map((f) => f.subtype))].map(esc).join(", ")}). These are never scored.</p>` : ""}
       ${d.flags.some((f) => f.type === "injection") ? `<p class="hint">The candidate tried to give the AI instructions. The interviewer kept to the interview; see How it decided.</p>` : ""}
     </section>
-
-    <nav class="tabs" role="tablist" aria-label="Report">${tabs.map(([k, label, n]) => `<a href="#/report/${id}/${k}" role="tab" data-tab="${k}" aria-selected="${k === tab}" class="${k === tab ? "on" : ""}">${label}${n != null ? `<span class="count">${n}</span>` : ""}</a>`).join("")}</nav>
 
     <section class="pane" data-pane="evidence">
       <div class="ledger">${r.criteria.map((x) => {
@@ -182,6 +188,8 @@ export async function reportPage(id, tab, nav) {
     ${g ? `<section class="pane" data-pane="integrity">${integrityPane(g)}</section>` : ""}
     <section class="pane" data-pane="trace" id="tracePane"><div class="skeleton" aria-hidden="true"><i></i><i></i></div></section>
     <section class="pane" data-pane="rating">${ratingPane(d.experience)}</section>
+      </div>
+    </div>
     ${printReport(d)}`;
 
   let traced = false;

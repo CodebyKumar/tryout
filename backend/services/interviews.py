@@ -201,8 +201,9 @@ async def answer_audio(
     return text, result, session, plan
 
 
-async def speak(token: str, turn_id: str) -> bytes:
-    """Interviewer audio for one agent turn. Generated on request and never stored: the transcript is the record."""
+async def speak(token: str, turn_id: str):
+    """Interviewer audio for one agent turn, streamed as it is generated, and never stored: the transcript is the
+    record. Raises VoiceError before any audio is sent when the voice service is off or failing."""
     async with db.transaction() as s:
         cand = await candidates.load(s, token=token)
         found = cand.session_id and await s.scalar(
@@ -212,7 +213,7 @@ async def speak(token: str, turn_id: str) -> bytes:
         )
     if not found:
         raise NotFound("No such turn")
-    return await tts.speak(found)
+    return await tts.stream(found)
 
 
 async def end(token: str, client_id: str = "") -> tuple[Session, InterviewPlan]:

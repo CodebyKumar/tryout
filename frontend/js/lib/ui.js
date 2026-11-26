@@ -154,8 +154,29 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Tab") { b.setAttribute("aria-expanded", "false"); menu.hidden = true; }
 });
 
-// A small "?" that explains a term on hover or keyboard focus.
-export const tip = (text) => `<span class="tip" tabindex="0" role="note" aria-label="${esc(text)}" data-tip="${esc(text)}">?</span>`;
+// A small "?" that explains a term on hover, keyboard focus or tap. One floating tooltip for the page, placed against
+// the viewport, so a scrolling table cannot clip it (a CSS tooltip inside the table could not show above it).
+export const tip = (text) => `<button type="button" class="tip" aria-label="${esc(text)}" data-tip="${esc(text)}">?</button>`;
+const bubble = document.createElement("div");
+bubble.className = "tooltip";
+bubble.setAttribute("role", "tooltip");
+bubble.hidden = true;
+document.body.appendChild(bubble); // modules run after the page is parsed, so the body exists
+function showTip(el) {
+  bubble.textContent = el.dataset.tip;
+  bubble.hidden = false;
+  const r = el.getBoundingClientRect(), b = bubble.getBoundingClientRect();
+  const above = r.top - b.height - 8 > 0;
+  bubble.style.top = `${above ? r.top - b.height - 8 : r.bottom + 8}px`;
+  bubble.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - b.width / 2, innerWidth - b.width - 8))}px`;
+}
+const hideTip = () => { bubble.hidden = true; };
+document.addEventListener("mouseover", (e) => { const t = e.target.closest?.(".tip"); if (t) showTip(t); });
+document.addEventListener("mouseout", (e) => { if (e.target.closest?.(".tip")) hideTip(); });
+document.addEventListener("focusin", (e) => { const t = e.target.closest?.(".tip"); if (t) showTip(t); });
+document.addEventListener("focusout", (e) => { if (e.target.closest?.(".tip")) hideTip(); });
+document.addEventListener("click", (e) => { const t = e.target.closest?.(".tip"); if (t) { e.stopPropagation(); showTip(t); } }, true);
+addEventListener("scroll", hideTip, true);
 
 export const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M8 3h16a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H14l-6.2 4.6c-.7.5-1.6 0-1.6-.8V25A6 6 0 0 1 2 19V9a6 6 0 0 1 6-6z" fill="var(--color-accent)"/><rect x="8" y="9" width="16" height="3.2" rx="1.6" fill="#fff"/><rect x="8" y="15.4" width="11" height="3.2" rx="1.6" fill="var(--color-mark)"/></svg>`;
 export const brand = (href = "/") => `<a class="brand" href="${href}" aria-label="TryOut home">${LOGO}<span>TryOut</span></a>`;

@@ -287,3 +287,14 @@ def test_start_waits_for_a_queued_resume_read_instead_of_reading_twice(client, m
     c.post(f"/api/i/{cand['token']}/start")
     assert [a for a, _ in llm.calls].count("candidate_prep") == 1
     assert run(_count(t.Plan)) == 1
+
+
+def test_voice_off_answers_503_before_any_audio(client, monkeypatch):
+    """The room falls back to the browser's voice on 503, so the stream must fail before sending audio."""
+    c, _ = client
+    monkeypatch.setattr(config, "DEEPGRAM_API_KEY", "")
+    _, cand = setup(c)
+    turn = c.post(f"/api/i/{cand['token']}/start").json()["turns"][0]["turn_id"]
+    r = c.get(f"/api/i/{cand['token']}/tts/{turn}")
+    assert r.status_code == 503 and "not configured" in r.json()["detail"]
+    assert c.get(f"/api/i/{cand['token']}/tts/a999").status_code == 404

@@ -50,7 +50,8 @@
 /* ---------- call: the same light system; the question is the main thing, the video tiles stay small ---------- */
 .call { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--color-paper); color: var(--color-ink); }
 .call-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-md); min-height: var(--bar-h); padding: 0 var(--space-xl); background: var(--color-surface); border-bottom: var(--rule-hair) solid var(--color-rule); font-size: var(--text-sm); color: var(--color-muted); }
-.call-title { display: flex; align-items: baseline; gap: var(--space-md); min-width: 0; }
+.call-title { display: flex; align-items: center; gap: var(--space-md); min-width: 0; }
+.call-title > span:last-child { padding-left: var(--space-md); border-left: 1px solid var(--color-rule); line-height: 1.2; }
 .call-title .brand { color: var(--color-ink); }
 .call-title span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parts { display: grid; justify-items: center; gap: var(--space-2xs); }
@@ -83,8 +84,9 @@
 .thinking i:nth-child(2) { animation-delay: 0.18s; } .thinking i:nth-child(3) { animation-delay: 0.36s; }
 @keyframes think { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
 
-.captions { min-height: 140px; padding: var(--space-lg); background: var(--color-surface); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); font-size: var(--text-lg); line-height: 1.5; text-wrap: pretty; }
-.captions .who { display: block; margin-bottom: var(--space-xs); font-size: var(--text-sm); font-weight: 600; color: var(--color-accent-deep); }
+/* Captions read like subtitles: centred under the tiles, no card around them. */
+.captions { min-height: 128px; max-width: 860px; margin-inline: auto; padding: var(--space-sm) var(--space-md); text-align: center; font: 400 1.375rem/1.5 var(--font-body); color: var(--color-ink); text-wrap: balance; }
+.captions .who { display: block; margin-bottom: var(--space-xs); font-size: var(--text-sm); font-weight: 600; color: var(--color-muted); }
 .captions.off { visibility: hidden; }
 .controls { display: flex; justify-content: center; gap: var(--space-xs); flex-wrap: wrap; padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom)); background: var(--color-surface); border-top: var(--rule-hair) solid var(--color-rule); }
 .ctl { min-height: 40px; padding: 0 var(--space-md); border-radius: var(--radius-input); border: var(--rule-hair) solid var(--color-rule-2); background: var(--color-surface); color: var(--color-ink); font: 500 var(--text-sm) var(--font-body); cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out); }
@@ -144,3 +146,13 @@
 .paused > div { max-width: 420px; display: grid; gap: var(--space-sm); padding: var(--space-lg); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-pop); }
 .paused .btn { justify-self: start; }
 .no-select .call { user-select: none; -webkit-user-select: none; }
+
+/* ---------- lobby: the checks sit under the camera, so both columns are about the same height ---------- */
+.lobby-media .checks { padding: var(--space-md); border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-surface); }
+.lobby-media .checks h2 { font-size: var(--text-md); }
+.join-panel { gap: var(--space-md); }
+.step { padding-top: var(--space-md); }
+
+/* ---------- end page: a larger logo ---------- */
+.endcard .brand { font-size: 1.75rem; gap: 12px; }
+.endcard .brand .logo-mark { width: 40px; height: 40px; }

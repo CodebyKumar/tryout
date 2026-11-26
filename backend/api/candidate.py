@@ -4,7 +4,7 @@ tab sends its own random X-Client-Id, so one interview runs in one tab at a time
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Header, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..models import ExperienceRating, IntegrityEvent
@@ -69,9 +69,10 @@ async def interview_audio(token: str, audio: UploadFile = File(...), client_id: 
 
 @router.get("/tts/{turn_id}")
 async def interview_tts(token: str, turn_id: str):
-    """503 (VoiceError) when the voice service is off or failing: the room then uses the browser's own voice."""
+    """Streamed MP3, so playback starts on the first chunk. 503 (VoiceError) before any audio when the voice service is
+    off or failing: the room then uses the browser's own voice."""
     audio = await interviews.speak(token, turn_id)
-    return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=600"})
+    return StreamingResponse(audio, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=600"})
 
 
 @router.post("/end")
