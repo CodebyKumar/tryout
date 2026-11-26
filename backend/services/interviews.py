@@ -167,38 +167,52 @@ async def start(
         return session, plan
 
 
+async def _candidate_id(token: str) -> str:
+    """The lock key alone: one indexed query, where a full _load is about seven round trips to the database."""
+    async with db.transaction() as s:
+        candidate_id = await s.scalar(select(t.Candidate.id).where(t.Candidate.token == token))
+    if not candidate_id:
+        raise NotFound("Interview link not found")
+    return candidate_id
+
+
+async def _answer(session: Session, plan: InterviewPlan, text: str, stt_ms: int) -> dict:
+    """Run the turn and save it. Called under the candidate's lock, on a session loaded under that lock."""
+    result = await handle_user_turn(plan, session, text, stt_ms)
+    async with db.transaction() as s:
+        await sessions.save(s, session)
+        if result["done"]:
+            jobs.enqueue(s, "evaluate", session.session_id)
+    jobs.wake()
+    return result
+
+
 async def answer(token: str, text: str, client_id: str = "", stt_ms: int = 0) -> tuple[dict, Session, InterviewPlan]:
     if not text.strip():
         raise Invalid("Empty answer")
-    cand, _, _ = await _load(token)
-    async with locked(cand.candidate_id):
-        _, session, plan = await _load(token)  # fresh, under the lock
+    async with locked(await _candidate_id(token)):
+        _, session, plan = await _load(token)
         _check_tab(session, client_id)
-        result = await handle_user_turn(plan, session, text, stt_ms)
-        async with db.transaction() as s:
-            await sessions.save(s, session)
-            if result["done"]:
-                jobs.enqueue(s, "evaluate", session.session_id)
-    jobs.wake()
-    return result, session, plan
+        return await _answer(session, plan, text, stt_ms), session, plan
 
 
 async def answer_audio(
     token: str, audio: bytes, filename: str, client_id: str = ""
 ) -> tuple[str, dict | None, Session, InterviewPlan]:
     """Voice answer: Whisper transcribes it (with role vocabulary as a hint), then the normal turn runs. Returns the
-    transcript and the turn result, or no result when nothing usable was said."""
-    cand, session, plan = await _load(token)
-    _check_tab(session, client_id)
-    last_q = next((x.text for x in reversed(session.turns) if x.role == "agent"), "")
-    started = time.monotonic()
-    # The candidate's full name goes in the hint: Whisper can't spell names it has never seen.
-    text = await stt.transcribe(audio, filename, f"Candidate: {cand.name}. {plan.stt_hint} {last_q}")
-    stt_ms = int((time.monotonic() - started) * 1000)
-    if text.lower().strip(" .!?") in _NOISE or not any(ch.isalnum() for ch in text):
-        return "", None, session, plan
-    result, session, plan = await answer(token, text, client_id, stt_ms)
-    return text, result, session, plan
+    transcript and the turn result, or no result when nothing usable was said. The lock is held through Whisper so
+    the session is loaded once per answer; this candidate's other requests wait about a second at most."""
+    async with locked(await _candidate_id(token)):
+        cand, session, plan = await _load(token)
+        _check_tab(session, client_id)
+        last_q = next((x.text for x in reversed(session.turns) if x.role == "agent"), "")
+        started = time.monotonic()
+        # The candidate's full name goes in the hint: Whisper can't spell names it has never seen.
+        text = await stt.transcribe(audio, filename, f"Candidate: {cand.name}. {plan.stt_hint} {last_q}")
+        stt_ms = int((time.monotonic() - started) * 1000)
+        if text.lower().strip(" .!?") in _NOISE or not any(ch.isalnum() for ch in text):
+            return "", None, session, plan
+        return text, await _answer(session, plan, text, stt_ms), session, plan
 
 
 async def speak(token: str, turn_id: str):

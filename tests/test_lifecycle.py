@@ -298,3 +298,30 @@ def test_voice_off_answers_503_before_any_audio(client, monkeypatch):
     r = c.get(f"/api/i/{cand['token']}/tts/{turn}")
     assert r.status_code == 503 and "not configured" in r.json()["detail"]
     assert c.get(f"/api/i/{cand['token']}/tts/a999").status_code == 404
+
+
+def test_a_voice_answer_loads_the_session_once(client, monkeypatch):
+    """Each load is several round trips to the cloud database: three per answer added seconds between turns."""
+    from backend.integrations import stt
+    from backend.services import interviews
+
+    c, _ = client
+    _, cand = setup(c)
+    token = cand["token"]
+    c.post(f"/api/i/{token}/start")
+    loads = []
+    real_load = interviews._load
+
+    async def counted(tok):
+        loads.append(tok)
+        return await real_load(tok)
+
+    async def heard(audio, filename, hint=""):
+        return "I built the settlement service and I own its retries."
+
+    monkeypatch.setattr(interviews, "_load", counted)
+    monkeypatch.setattr(stt, "transcribe", heard)
+    r = c.post(f"/api/i/{token}/audio", files={"audio": ("answer.webm", b"x" * 5000, "audio/webm")})
+    assert r.status_code == 200, r.text
+    assert r.json()["say"]
+    assert len(loads) == 1

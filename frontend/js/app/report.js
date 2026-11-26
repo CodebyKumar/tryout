@@ -27,7 +27,7 @@ function integrityPane(g) {
     const hits = g.events.filter((e) => kinds.includes(e.kind));
     const evidence = hits.map((e) => `<li><span class="mono">${fmt(e.at_sec)}</span>${e.seconds ? ` for ${Math.round(e.seconds)}s` : ""}${e.detail ? `, ${esc(e.detail)}` : ""}</li>`).join("");
     return `<tr><td>${label}</td><td>${hits.length ? `<span class="pill warn">${plural(hits.length, "time")}</span>` : `<span class="pill above">Not seen</span>`}</td>
-      <td>${hits.length ? `<ul class="evidence">${evidence}</ul>` : `<span class="muted">-</span>`}</td></tr>`;
+      <td>${hits.length ? `<ul class="evidence">${evidence}</ul>` : `<span class="empty-val">Never</span>`}</td></tr>`;
   }).join("");
   return `<p class="hint pane-note">These are signals from the candidate's browser, for context. They are never part of the score. A web page cannot see a second device or every extension, so "Not seen" is not proof.</p>
     <div class="table-wrap"><table class="table"><thead><tr><th>Check</th><th>Result</th><th>When</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -85,12 +85,12 @@ function printReport(d) {
       <td><span>Overall score</span><b>${r.overall_score != null ? `${r.overall_score} / 10` : "Not enough evidence"}</b></td>
       <td><span>AI suggests</span><b>${r.recommendation ? REC[r.recommendation] : "No suggestion"}</b></td>
       <td><span>Decision</span><b>${c.decision ? DECISION[c.decision] : "Not decided"}</b></td>
-      <td><span>Resume fit</span><b>${d.fit?.score != null ? `${d.fit.score}%` : "-"}</b></td>
+      <td><span>Resume fit</span><b>${d.fit?.score != null ? `${d.fit.score}%` : "No resume read"}</b></td>
     </tr></table>
     <section><h2>Summary</h2><p>${esc(r.summary)}</p>${r.recommendation_reason ? `<p><b>Why the suggestion:</b> ${esc(r.recommendation_reason)}</p>` : ""}</section>
     <section class="two">${items("Strengths", r.strengths)}${items("Concerns", r.concerns)}${items("Resume claims not backed up", r.resume_flags)}</section>
     <section><h2>Scores by criterion</h2><table class="crit-table"><thead><tr><th>Criterion</th><th>Weight</th><th>Rating</th><th>Score</th><th>Evidence from the interview</th></tr></thead><tbody>
-      ${r.criteria.map((x) => `<tr><td>${esc(x.name)}</td><td>${weight(x.criterion_id)}%</td><td>${RATING[x.rating][0]}</td><td>${x.score != null && x.verified ? `${x.score} / 10` : "-"}</td>
+      ${r.criteria.map((x) => `<tr><td>${esc(x.name)}</td><td>${weight(x.criterion_id)}%</td><td>${RATING[x.rating][0]}</td><td>${x.score != null && x.verified ? `${x.score} / 10` : "Not counted"}</td>
         <td>${x.evidence.map((e) => `<p>${e.at} “${esc(e.quote)}”</p>`).join("") || `<p class="muted">${x.verified ? "No evidence" : "Not backed by a quote, not counted"}</p>`}</td></tr>`).join("")}</tbody></table></section>
     <section><h2>Integrity</h2>${flagged.length ? `<ul>${flagged.map(([label, hits]) => `<li>${label}: ${hits.map((e) => `${fmt(e.at_sec)}${e.seconds ? ` (${Math.round(e.seconds)}s)` : ""}${e.kind === "extension" ? ` ${esc(e.detail)}` : ""}`).join(", ")}</li>`).join("")}</ul>` : "<p>No issues noted.</p>"}</section>
     ${d.experience ? `<section><h2>Candidate rating of the interview</h2><p>${d.experience.stars} / 5, ${STARS[d.experience.stars]}${d.experience.comment ? `: “${esc(d.experience.comment)}”` : ""}</p></section>` : ""}
@@ -157,8 +157,8 @@ export async function reportPage(id, tab, nav) {
             <div><dt>Score</dt><dd>${r.overall_score != null ? `${r.overall_score} / 10` : `<span class="muted">Not enough evidence</span>`}</dd></div>
             <div><dt>AI suggests ${tip("Worked out in code from the verified ratings, not taken from the model. The decision is yours.")}</dt><dd>${r.recommendation ? `<span class="pill ${r.recommendation}">${REC[r.recommendation]}</span>` : `<span class="pill">None</span>`}</dd></div>
             <div><dt>Criteria met</dt><dd>${met} of ${r.criteria.length}</dd></div>
-            <div><dt>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</dt><dd>${d.fit?.score != null ? `${d.fit.score}%` : "-"}</dd></div>
-            <div><dt>Integrity ${tip("Browser signals during the interview, such as leaving the tab. Context only, never scored.")}</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : "-"}</dd></div>
+            <div><dt>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</dt><dd>${d.fit?.score != null ? `${d.fit.score}%` : `<span class="empty-val">No resume read</span>`}</dd></div>
+            <div><dt>Integrity ${tip("Browser signals during the interview, such as leaving the tab. Context only, never scored.")}</dt><dd>${g ? `<span class="pill ${LEVEL[g.level][1]}">${LEVEL[g.level][0]}</span>` : `<span class="empty-val">No data</span>`}</dd></div>
             <div><dt>Length</dt><dd>${fmt(d.duration_sec)}</dd></div>
           </dl>
         </section>
@@ -175,7 +175,7 @@ export async function reportPage(id, tab, nav) {
     <section class="pane" data-pane="evidence">
       <div class="ledger">${r.criteria.map((x) => {
         const [label, cls] = RATING[x.rating];
-        return `<article class="ledger-row"><div class="lg-score">${x.score ? `<span class="fig">${x.score}</span><span class="small muted">/ 10</span>` : `<span class="muted">-</span>`}</div>
+        return `<article class="ledger-row"><div class="lg-score">${x.score ? `<span class="fig">${x.score}</span><span class="small muted">/ 10</span>` : `<span class="empty-val">Not scored</span>`}</div>
           <div><div class="crit-top"><h3>${esc(x.name)}</h3><span class="pill ${cls}">${label}</span></div>
             <p class="rationale">${esc(x.rationale)}</p>
             ${x.verified ? "" : `<p class="small warn-text">No quote backs this rating, so it doesn't count toward the score.</p>`}
@@ -245,6 +245,6 @@ export async function comparePage(roleId, ids, nav) {
   app.innerHTML = `<div class="page-head"><div><h1>Compare candidates</h1><p class="sub">Each cell shows the rating and the candidate's strongest quote.</p></div></div>
     <div class="table-wrap"><table class="table compare"><thead><tr><th>Criterion</th>${reports.map((d) => `<th><a href="#/report/${d.candidate.candidate_id}">${esc(d.candidate.name)}</a></th>`).join("")}</tr></thead><tbody>
       <tr><td><b>Overall</b></td>${reports.map((d) => `<td><span class="fig">${d.report?.overall_score ?? "-"}</span> <span class="muted">/ 10</span>${d.report?.recommendation ? ` <span class="pill ${d.report.recommendation}">${REC[d.report.recommendation]}</span>` : ""}</td>`).join("")}</tr>
-      <tr><td>Resume fit</td>${reports.map((d) => `<td class="fig">${d.fit?.score != null ? d.fit.score + "%" : "-"}</td>`).join("")}</tr>
+      <tr><td>Resume fit</td>${reports.map((d) => `<td class="fig">${d.fit?.score != null ? d.fit.score + "%" : `<span class="empty-val">No resume read</span>`}</td>`).join("")}</tr>
       ${names.map((n) => `<tr><td>${esc(n)}</td>${reports.map((d) => cell(d, n)).join("")}</tr>`).join("")}</tbody></table></div>`;
 }

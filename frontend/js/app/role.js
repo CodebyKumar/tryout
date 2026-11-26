@@ -1,5 +1,5 @@
 // One role: header and stats, then a tab each for candidates, the interview plan, scoring and settings.
-import { $, $$, confirmDialog, copy, dialog, dropdown, esc, fmt, plural, selectField, status, ticking, tip } from "../lib/ui.js";
+import { $, $$, ICONS, confirmDialog, copy, dialog, dropdown, esc, fmt, iconButton, plural, selectField, status, ticking, tip } from "../lib/ui.js";
 import { editDialog, fromInput, inviteDialog, windowText } from "./invite.js";
 import { DECISION, REC, app, canWrite, crumbs, get, linkFor, minutes, refreshLater, send, stale, wireRows } from "./store.js";
 
@@ -19,25 +19,13 @@ export async function rolePage(id, tab, filter, nav) {
   if (stale(nav)) return;
   crumbs([["Roles", "#/"], [role.title, `#/role/${id}`]]);
   const tabHref = (k) => (k === "candidates" ? `#/role/${id}` : `#/role/${id}/${k}`);
-  const count = (test) => role.candidates.filter(test).length;
   const writable = canWrite();
   // The role's sections and its numbers sit in a left sidebar, so the chosen section starts right under the title.
-  const fact = (label, value, help = "") => `<div><dt>${label}${help ? ` ${tip(help)}` : ""}</dt><dd>${value}</dd></div>`;
-  app.innerHTML = `<div class="page-head"><div><h1>${esc(role.title)}</h1>${role.company ? `<p class="sub">${esc(role.company)}</p>` : ""}</div>
+  app.innerHTML = `<div class="page-head"><div><h1>${esc(role.title)}</h1><p class="role-meta">${role.company ? `<span>${esc(role.company)}</span>` : ""}<span class="tag">${minutes(role.time_budget_sec)} min interview</span><span class="tag ${role.integrity === "strict" ? "warn" : ""}">${role.integrity === "strict" ? "Strict" : "Standard"} integrity ${tip("Standard notes browser signals on the report. Strict also requires full screen, blocks copy and paste, and refuses to start with a detectable extension. Change it in Settings.")}</span><span class="tag">Brief v${role.version} ${tip("Each change to the plan or scoring makes a new version. Candidates keep the version they were prepared on.")}</span></p></div>
       ${writable ? `<div class="actions"><button type="button" class="btn" id="aiBtn">Edit with AI</button><button type="button" class="btn primary" id="addBtn">Add candidates</button></div>` : ""}</div>
     <div class="role-layout">
       <aside class="role-side">
         <nav class="side-tabs" aria-label="Role">${ROLE_TABS.map(([k, label]) => `<a href="${tabHref(k)}" class="${tab === k ? "on" : ""}" ${tab === k ? 'aria-current="page"' : ""}><span>${label}</span>${k === "candidates" ? `<span class="count">${role.candidates.length}</span>` : ""}</a>`).join("")}</nav>
-        <section class="overview" aria-label="Overview">
-          <dl class="facts">
-            ${fact("Candidates", role.candidates.length)}
-            ${fact("Interviewed", count((c) => c.status === "completed"), "Interviews finished and scored.")}
-            ${fact("To review", count((c) => c.status === "completed" && !c.decision), "Scored, with no decision from you yet.")}
-            ${fact("Length", `${minutes(role.time_budget_sec)} min`)}
-            ${fact("Integrity", role.integrity === "strict" ? "Strict" : "Standard", "Standard notes browser signals on the report. Strict also requires full screen, blocks copy and paste, and refuses to start with a detectable extension. Change it in Settings.")}
-            ${fact("Brief", `v${role.version}`, "Each change to the plan or scoring makes a new version. Candidates keep the version they were prepared on.")}
-          </dl>
-        </section>
       </aside>
       <div id="body" class="role-main"></div>
     </div>`;
@@ -85,18 +73,20 @@ function candidatesTab(role, filter, nav) {
   const canOpen = (c) => c.fit != null || c.score != null || c.status !== "invited";
   const pick = role.candidates.filter((c) => scored(c) && c.score != null).length >= 2; // compare needs two scored
   body.innerHTML = `<div class="toolbar"><nav class="filters" aria-label="Filter candidates">${FILTERS.map(([k, label, t]) => `<a href="#/role/${role.role_id}/candidates/${k}" class="${k === filter ? "on" : ""}" ${k === filter ? 'aria-current="true"' : ""}>${label}<span class="count">${role.candidates.filter(t).length}</span></a>`).join("")}</nav></div>
-    ${list.length ? `<div class="table-wrap"><table class="table candidates">
+    ${list.length ? `<div class="table-wrap cand-table"><table class="table candidates">
       <colgroup>${pick ? `<col class="c-check">` : ""}<col class="c-name"><col class="c-status"><col class="c-score"><col class="c-rec"><col class="c-fit"><col class="c-actions"></colgroup>
-      <thead><tr>${pick ? `<th class="check"><span class="visually-hidden">Compare</span></th>` : ""}<th>Candidate</th><th>Status</th><th>Score ${tip("Out of 10, from the criteria a quote backs up.")}</th><th>AI suggests ${tip("Worked out in code from the verified ratings. You decide.")}</th><th>Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</th><th class="end"><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+      <thead><tr>${pick ? `<th class="check"><span class="visually-hidden">Compare</span></th>` : ""}<th>Candidate</th><th>Status</th><th class="num">Score ${tip("Out of 10, from the criteria a quote backs up.")}</th><th>AI suggests ${tip("Worked out in code from the verified ratings. You decide.")}</th><th class="num">Resume fit ${tip("How much of the role's requirements the resume shows, read by the AI before the interview.")}</th><th class="end"><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${list.map((c) => `<tr ${canOpen(c) ? `class="click" data-href="#/report/${c.candidate_id}"` : ""}>
         ${pick ? `<td class="check">${scored(c) && c.score != null ? `<input type="checkbox" data-pick="${c.candidate_id}" aria-label="Compare ${esc(c.name)}">` : ""}</td>` : ""}
         <td data-label="Candidate">${canOpen(c) ? `<a class="name" href="#/report/${c.candidate_id}">${esc(c.name)}</a>` : `<span class="name">${esc(c.name)}</span>`}${c.email ? `<div class="sub">${esc(c.email)}</div>` : ""}${c.status === "invited" ? `<div class="sub">${esc(windowText(c))}</div>` : ""}</td>
         <td data-label="Status">${statusCell(c)}</td>
-        <td class="fig-cell" data-label="Score">${c.score != null ? `${c.score}<span class="muted"> / 10</span>` : `<span class="muted">-</span>`}</td>
-        <td data-label="AI suggests">${c.recommendation ? `<span class="pill ${c.recommendation}">${REC[c.recommendation]}</span>` : `<span class="muted">-</span>`}</td>
-        <td class="fig-cell" data-label="Resume fit">${c.fit != null ? `${c.fit}%` : `<span class="muted">-</span>`}</td>
-        <td class="end"><div class="row-actions">${c.status === "invited" ? `<button type="button" class="btn quiet" data-copy="${esc(linkFor(c))}">Copy link</button>${writable ? `<button type="button" class="btn quiet" data-invite="${c.candidate_id}">Invite</button>` : ""}` : ""}
-          ${writable ? dropdown({ label: "&hellip;", cls: "btn quiet icon", chevron: false, ariaLabel: `More actions for ${c.name}`, items: [
+        <td class="num" data-label="Score">${c.score != null ? `${c.score}<span class="muted"> / 10</span>` : `<span class="empty-val">${c.state === "DONE" ? "Too few quotes" : "Pending"}</span>`}</td>
+        <td data-label="AI suggests">${c.recommendation ? `<span class="pill ${c.recommendation}">${REC[c.recommendation]}</span>` : `<span class="empty-val">${c.state === "DONE" ? "None" : "Pending"}</span>`}</td>
+        <td class="num" data-label="Resume fit">${c.fit != null ? `${c.fit}%` : `<span class="empty-val">${c.prep_status === "pending" ? "Reading" : "No resume"}</span>`}</td>
+        <td class="end"><div class="row-actions">${c.status === "invited"
+          ? `${iconButton("link", "Copy interview link", `data-copy="${esc(linkFor(c))}"`)}${writable ? iconButton("mail", "Invite by email", `data-invite="${c.candidate_id}"`) : ""}`
+          : canOpen(c) ? `<a class="btn quiet icon" href="#/report/${c.candidate_id}" aria-label="Open report" data-tip="Open report">${ICONS.report}</a>` : ""}
+          ${writable ? dropdown({ label: ICONS.more, cls: "btn quiet icon", chevron: false, ariaLabel: `More actions for ${c.name}`, items: [
             ...(canOpen(c) ? [{ label: "Open report", href: `#/report/${c.candidate_id}` }] : []),
             { label: c.status === "invited" ? "Edit or reschedule" : "Edit details", value: `edit:${c.candidate_id}` },
             ...(c.status !== "invited" || c.expired ? [{ label: "Reset with a new link", value: `reset:${c.candidate_id}` }] : []),

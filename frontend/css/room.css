@@ -156,3 +156,9 @@
 /* ---------- end page: a larger logo ---------- */
 .endcard .brand { font-size: 1.75rem; gap: 12px; }
 .endcard .brand .logo-mark { width: 40px; height: 40px; }
+
+/* ---------- lobby facts: role, company and length as three even columns, label above value ---------- */
+.join-panel .meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm) var(--space-lg); margin: 0; padding: var(--space-sm) var(--space-md); border-radius: 10px; background: var(--color-paper-2); }
+.join-panel .meta div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.join-panel .meta dt { font-size: var(--text-xs); color: var(--color-muted); }
+.join-panel .meta dd { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--color-ink); white-space: nowrap; }

@@ -95,7 +95,7 @@ label { display: flex; flex-direction: column; gap: var(--space-2xs); font-size:
 .form { display: grid; gap: var(--space-lg); }
 
 /* ---------- page head, tabs, panels ---------- */
-.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-lg); flex-wrap: wrap; margin-bottom: var(--space-lg); }
+.page-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-lg); flex-wrap: wrap; margin-bottom: var(--space-lg); }
 .page-head .sub { margin-top: var(--space-xs); color: var(--color-muted); max-width: 64ch; }
 .page-head .actions { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
 .meta { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-lg); margin: var(--space-sm) 0 0; font-size: var(--text-sm); }
@@ -330,8 +330,8 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
 .dd-select .dd-menu { max-width: none; }
 
 /* ---------- "?" explanations ---------- */
-.tip { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; padding: 0; border-radius: 50%; border: var(--rule-hair) solid var(--color-rule-2); background: var(--color-surface); color: var(--color-muted); font: 600 13px/1 var(--font-body); vertical-align: middle; cursor: help; }
-.tip:hover, .tip:focus-visible { color: var(--color-ink); border-color: var(--color-ink-2); }
+.tip { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--color-muted); vertical-align: middle; cursor: pointer; }
+.tip:hover, .tip:focus-visible { color: var(--color-accent); }
 .tooltip { position: fixed; z-index: var(--z-tooltip); max-width: 280px; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-input); background: var(--color-ink); color: var(--color-accent-ink); font: 400 var(--text-sm)/1.45 var(--font-body); box-shadow: var(--shadow-pop); pointer-events: none; }
 .tooltip[hidden] { display: none; }
 
@@ -388,13 +388,6 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
   .page-head { flex-wrap: wrap; }
   .page-head .actions { width: 100%; }
   /* the candidate table becomes one card per candidate: each cell labelled, actions on their own line */
-  .table.candidates thead { display: none; }
-  .table.candidates, .table.candidates tbody, .table.candidates tr, .table.candidates td { display: block; width: 100%; }
-  .table.candidates tr { padding: var(--space-sm) 0; border-top: var(--rule-hair) solid var(--color-rule); }
-  .table.candidates td { border: 0; padding: var(--space-3xs) 0; text-align: left; }
-  .table.candidates td[data-label]:not([data-label="Candidate"])::before { content: attr(data-label); display: inline-block; min-width: 104px; color: var(--color-muted); font-size: var(--text-sm); }
-  .table.candidates td.check:empty { display: none; }
-  .table.candidates td.end { display: flex; flex-wrap: wrap; gap: var(--space-2xs); justify-content: flex-start; }
   .trace-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
   .dialog-actions.wrap .btn { flex: 1 1 auto; }
 }
@@ -415,21 +408,54 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
 .role-main { min-width: 0; }
 .role-main > .toolbar:first-child { margin-top: 0; }
 
-/* ---------- candidate table: fixed columns, one alignment, actions in a row ---------- */
-.table.candidates { table-layout: fixed; width: 100%; }
-.table.candidates .c-check { width: 36px; }
-.table.candidates .c-name { width: 27%; }
-.table.candidates .c-status { width: 17%; }
-.table.candidates .c-score { width: 11%; }
-.table.candidates .c-rec { width: 16%; }
-.table.candidates .c-fit { width: 12%; }
-.table.candidates .c-actions { width: 200px; }
-.table.candidates td { padding-block: var(--space-md); }
-.table.candidates .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.table.candidates .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fig-cell { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* ---------- candidate table: a framed panel, fixed columns, text left and numbers right, actions always last ---------- */
+.cand-table { border: var(--rule-hair) solid var(--color-rule); border-radius: 12px; background: var(--color-surface); }
+.table.candidates { table-layout: fixed; width: 100%; min-width: 860px; }
+.table.candidates col.c-check { width: 48px; }
+.table.candidates col.c-name { width: auto; }
+.table.candidates col.c-status { width: 160px; }
+.table.candidates col.c-score { width: 160px; }
+.table.candidates col.c-rec { width: 160px; }
+.table.candidates col.c-fit { width: 160px; }
+.table.candidates col.c-actions { width: 148px; }
+.table.candidates th { padding: 12px 16px; background: var(--color-paper-2); border-bottom: var(--rule-hair) solid var(--color-rule); }
+.table.candidates th:first-child { border-top-left-radius: 12px; }
+.table.candidates th:last-child { border-top-right-radius: 12px; }
+.table.candidates td { padding: 14px 16px; vertical-align: middle; }
+.table.candidates th:first-child, .table.candidates td:first-child { padding-left: 20px; }
+.table.candidates th:last-child, .table.candidates td:last-child { padding-right: 12px; }
+.table.candidates tbody tr:last-child td { border-bottom: 0; }
+.table.candidates .num { text-align: left; font-variant-numeric: tabular-nums; }
+.table.candidates th.num .tip { margin-left: 2px; }
+.table.candidates td.num { font-weight: 600; }
+.table.candidates .name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table.candidates .sub { margin-top: 2px; font-size: var(--text-sm); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table.candidates .pill { white-space: nowrap; }
+/* what an empty value means, in words instead of a dash */
+.empty-val { font: 400 var(--text-sm)/1.4 var(--font-body); color: var(--color-muted); white-space: nowrap; }
 .row-actions { display: flex; justify-content: flex-end; align-items: center; gap: 2px; }
 .row-actions .btn.quiet { padding-inline: var(--space-xs); }
+.row-actions .btn.icon, .row-actions .dd-btn { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; color: var(--color-ink-2); }
+.row-actions .btn.icon:hover, .row-actions .dd-btn:hover { color: var(--color-ink); }
+@media (max-width: 40rem) {
+  /* on a phone each row becomes a labelled block, so nothing scrolls sideways */
+  .table.candidates { min-width: 0; }
+  .table.candidates colgroup, .table.candidates thead { display: none; }
+  .table.candidates, .table.candidates tbody, .table.candidates tr, .table.candidates td { display: block; width: 100%; }
+  .table.candidates tr { padding: 12px 16px; border-bottom: var(--rule-hair) solid var(--color-rule); }
+  .table.candidates tbody tr:last-child { border-bottom: 0; }
+  .table.candidates td, .table.candidates td:first-child, .table.candidates td:last-child { padding: 3px 0; border: 0; text-align: left; }
+  .table.candidates td[data-label]:not([data-label="Candidate"])::before { content: attr(data-label); display: inline-block; min-width: 104px; color: var(--color-muted); font: 400 var(--text-sm)/1.5 var(--font-body); }
+  .table.candidates td.check:empty { display: none; }
+  .table.candidates td.num { text-align: left; }
+  .row-actions { justify-content: flex-start; margin-top: 4px; }
+}
+
+/* ---------- role facts under the title ---------- */
+.role-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-sm); margin-top: var(--space-2xs); color: var(--color-muted); }
+.role-meta .tag { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 0 4px 0 10px; border-radius: 99px; background: var(--color-paper-2); color: var(--color-ink-2); font-size: var(--text-sm); font-weight: 500; }
+.role-meta .tag:not(:has(.tip)) { padding-right: 10px; }
+.role-meta .tag.warn { background: color-mix(in oklab, var(--color-warn) 14%, var(--color-surface)); }
 
 @media (max-width: 60rem) {
   .role-layout { grid-template-columns: 1fr; gap: var(--space-md); }
@@ -439,10 +465,6 @@ input[aria-invalid="true"] { border-color: var(--color-error); }
   .overview { padding-top: 0; border-top: 0; }
   .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs) var(--space-md); }
   .facts > div { flex-direction: column; align-items: flex-start; gap: 0; }
-}
-@media (max-width: 40rem) {
-  .table.candidates { table-layout: auto; }
-  .row-actions { justify-content: flex-start; }
 }
 
 @media print {

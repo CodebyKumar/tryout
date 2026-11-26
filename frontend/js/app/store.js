@@ -45,7 +45,7 @@ export function crumbs(items) {
 
 // Whole table rows open their link; clicks on buttons, links and menus inside the row keep their own meaning.
 export function wireRows(root = app) {
-  root.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => {
+  root.querySelectorAll("[data-href]").forEach((tr) => tr.addEventListener("click", (e) => {
     if (!e.target.closest("button, a, input, .dd, .tip")) location.hash = tr.dataset.href;
   }));
 }

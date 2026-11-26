@@ -50,12 +50,23 @@ export function dialog(html, wide = true) {
 }
 
 export async function copy(text, button) {
-  const label = button?.textContent;
+  const html = button?.innerHTML;
   try {
     await navigator.clipboard.writeText(text);
-    if (button) { button.textContent = "Copied"; setTimeout(() => (button.textContent = label), 1500); }
+    if (button) { button.innerHTML = button.classList.contains("icon") ? ICONS.check : "Copied"; setTimeout(() => (button.innerHTML = html), 1500); }
   } catch { prompt("Copy this", text); }
 }
+
+// Line icons for compact actions (16px, one stroke weight). Each icon button also carries aria-label and data-tip.
+const svg = (d) => `<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+export const ICONS = {
+  link: svg(`<path d="M6.5 9.5 9.5 6.5"/><path d="M7 4.5 8.4 3.1a2.8 2.8 0 0 1 4 4L11 8.5"/><path d="M9 11.5 7.6 12.9a2.8 2.8 0 0 1-4-4L5 7.5"/>`),
+  mail: svg(`<rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.5 4.5 5.5 4 5.5-4"/>`),
+  report: svg(`<path d="M4 2h5.5L12 4.5V14H4z"/><path d="M9.5 2v2.5H12"/><path d="M6 8h4M6 10.5h4"/>`),
+  check: svg(`<path d="m3.5 8.5 3 3 6-7"/>`),
+  more: svg(`<circle cx="3.5" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12.5" cy="8" r="1" fill="currentColor"/>`),
+};
+export const iconButton = (icon, label, attrs = "") => `<button type="button" class="btn quiet icon" aria-label="${esc(label)}" data-tip="${esc(label)}" ${attrs}>${ICONS[icon]}</button>`;
 
 // ---------- Dropdown: one component for action menus, the account menu and custom selects ----------
 // dropdown() returns HTML; its behaviour is wired once for the whole page below (open, close, arrow keys, Escape,
@@ -156,7 +167,8 @@ document.addEventListener("keydown", (e) => {
 
 // A small "?" that explains a term on hover, keyboard focus or tap. One floating tooltip for the page, placed against
 // the viewport, so a scrolling table cannot clip it (a CSS tooltip inside the table could not show above it).
-export const tip = (text) => `<button type="button" class="tip" aria-label="${esc(text)}" data-tip="${esc(text)}">?</button>`;
+const INFO = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.9" r="0.95" fill="currentColor"/></svg>`;
+export const tip = (text) => `<button type="button" class="tip" aria-label="${esc(text)}" data-tip="${esc(text)}">${INFO}</button>`;
 const bubble = document.createElement("div");
 bubble.className = "tooltip";
 bubble.setAttribute("role", "tooltip");
@@ -171,10 +183,10 @@ function showTip(el) {
   bubble.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - b.width / 2, innerWidth - b.width - 8))}px`;
 }
 const hideTip = () => { bubble.hidden = true; };
-document.addEventListener("mouseover", (e) => { const t = e.target.closest?.(".tip"); if (t) showTip(t); });
-document.addEventListener("mouseout", (e) => { if (e.target.closest?.(".tip")) hideTip(); });
-document.addEventListener("focusin", (e) => { const t = e.target.closest?.(".tip"); if (t) showTip(t); });
-document.addEventListener("focusout", (e) => { if (e.target.closest?.(".tip")) hideTip(); });
+document.addEventListener("mouseover", (e) => { const t = e.target.closest?.("[data-tip]"); if (t) showTip(t); });
+document.addEventListener("mouseout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
+document.addEventListener("focusin", (e) => { const t = e.target.closest?.("[data-tip]"); if (t) showTip(t); });
+document.addEventListener("focusout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
 document.addEventListener("click", (e) => { const t = e.target.closest?.(".tip"); if (t) { e.stopPropagation(); showTip(t); } }, true);
 addEventListener("scroll", hideTip, true);
 
